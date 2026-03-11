@@ -1,0 +1,103 @@
+import discord
+from discord.ext import commands
+
+
+class DevCommands(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    @commands.is_owner()
+    async def reload(self, ctx, extension: str):
+        extension = extension.strip().replace(".py", "")
+        full_extension = f"cogs.{extension}"
+
+        try:
+            await self.bot.reload_extension(full_extension)
+            await ctx.send(f"Reloaded `{full_extension}`")
+        except Exception as exc:
+            await ctx.send(
+                f"Failed to reload `{full_extension}`: `{type(exc).__name__}: {exc}`"
+            )
+
+    @commands.command()
+    @commands.is_owner()
+    async def reloadall(self, ctx):
+        extensions = [
+            "cogs.expense_commands",
+            "cogs.error_handler",
+            "cogs.chat_commands",
+            "cogs.dev_commands",
+        ]
+
+        results = []
+
+        for extension in extensions:
+            try:
+                await self.bot.reload_extension(extension)
+                results.append(f"Reloaded `{extension}`")
+            except Exception as exc:
+                results.append(
+                    f"Failed `{extension}`: `{type(exc).__name__}: {exc}`"
+                )
+
+        await ctx.send("\n".join(results))
+
+    @commands.command()
+    @commands.is_owner()
+    async def whichmodel(self, ctx):
+        chat_cog = self.bot.get_cog("ChatCommands")
+        if chat_cog is None:
+            await ctx.send("`ChatCommands` is not loaded.")
+            return
+
+        llm = getattr(chat_cog, "llm", None)
+        if llm is None:
+            await ctx.send("LLM service is not available.")
+            return
+
+        try:
+            model_name = llm._get_active_model_name()
+        except Exception as exc:
+            await ctx.send(
+                f"Could not read active model: `{type(exc).__name__}: {exc}`"
+            )
+            return
+
+        await ctx.send(f"Provider: `{llm.provider}` | Model: `{model_name}`")
+
+    @commands.command()
+    @commands.is_owner()
+    async def cogs(self, ctx):
+        loaded = sorted(self.bot.extensions.keys())
+
+        if not loaded:
+            await ctx.send("No cogs are currently loaded.")
+            return
+
+        await ctx.send("Loaded cogs:\n" + "\n".join(f"`{name}`" for name in loaded))
+
+    @commands.command()
+    @commands.is_owner()
+    async def reloadchat(self, ctx):
+        try:
+            await self.bot.reload_extension("cogs.chat_commands")
+            await ctx.send("Reloaded `cogs.chat_commands`")
+        except Exception as exc:
+            await ctx.send(f"Failed: `{type(exc).__name__}: {exc}`")
+
+    @reload.error
+    @reloadall.error
+    @whichmodel.error
+    @cogs.error
+    @reloadchat.error
+    async def dev_command_error(self, ctx, error):
+        if isinstance(error, commands.NotOwner):
+            await ctx.send("You are not allowed to use that command.")
+            return
+
+        raise error
+
+
+async def setup(bot):
+    await bot.add_cog(DevCommands(bot))

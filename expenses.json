@@ -1,0 +1,16 @@
+[
+    {
+        "date": "2026-03-10",
+        "category": "gas",
+        "amount": 42.15,
+        "method": "debit",
+        "note": "filled up truck"
+    },
+    {
+        "date": "07-06-1994",
+        "category": "food",
+        "amount": 27.0,
+        "method": "card",
+        "note": "cb payment"
+    }
+]
