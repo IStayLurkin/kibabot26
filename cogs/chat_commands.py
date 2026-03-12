@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import discord
@@ -15,6 +16,7 @@ from services.chat_service import ChatReply, generate_dynamic_reply
 from services.llm_service import LLMService
 from services.memory_service import store_memory_if_found
 from services.summary_service import maybe_update_summary
+from services.tool_router import ToolRouter
 
 
 class ChatCommands(commands.Cog):
@@ -23,6 +25,7 @@ class ChatCommands(commands.Cog):
         self.user_cooldowns = {}
         self.llm = getattr(bot, "llm_service", None) or LLMService()
         self.allowed_chat_channels = BOT_ALLOWED_CHAT_CHANNELS
+        self.tool_router = ToolRouter()
 
     def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
         now = time.monotonic()
@@ -55,22 +58,51 @@ class ChatCommands(commands.Cog):
             "osint_service": getattr(self.bot, "osint_service", None),
         }
 
+    def get_typing_delay(self, content: str) -> float:
+        cleaned = (content or "").strip()
+        if not cleaned:
+            return 0.6
+
+        estimated_seconds = len(cleaned) / 45.0
+        return min(5.0, max(0.6, estimated_seconds))
+
     async def send_chat_message(self, destination, reply):
         if isinstance(reply, str):
+            async with destination.typing():
+                await asyncio.sleep(self.get_typing_delay(reply))
             await destination.send(reply)
             return
 
         if not isinstance(reply, ChatReply):
-            await destination.send(str(reply))
+            text_reply = str(reply)
+            async with destination.typing():
+                await asyncio.sleep(self.get_typing_delay(text_reply))
+            await destination.send(text_reply)
             return
 
         files = [discord.File(path) for path in reply.file_paths if path]
+        typing_delay = self.get_typing_delay(reply.content)
+
+        async with destination.typing():
+            await asyncio.sleep(typing_delay)
 
         if files:
             await destination.send(reply.content, files=files)
             return
 
         await destination.send(reply.content)
+
+    async def maybe_send_tool_ack(self, destination, content: str):
+        route_decision = self.tool_router.route(content)
+        acknowledgements = {
+            "image": "On it, generating that now...",
+            "voice": "On it, making that audio now...",
+            "video": "On it, starting that video request now...",
+        }
+
+        ack_message = acknowledgements.get(route_decision.tool_name)
+        if ack_message:
+            await destination.send(ack_message)
 
     async def handle_chat_turn(self, destination, author, channel, content: str):
         user_id = str(author.id)
@@ -87,6 +119,8 @@ class ChatCommands(commands.Cog):
             await self.send_chat_message(destination, reply_text)
             await maybe_update_summary(self.llm, user_id, channel_id, session_id)
             return
+
+        await self.maybe_send_tool_ack(destination, content)
 
         reply = await generate_dynamic_reply(
             self.llm,

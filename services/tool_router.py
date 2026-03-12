@@ -27,6 +27,8 @@ class ToolRouter:
     IMAGE_PATTERNS = [
         r"^(?:!image|!img)\b",
         r"\b(?:generate|make|create|draw)\b.*\b(?:image|picture|art|photo)\b",
+        r"^(?:draw me|draw|generate (?:me )?(?:a|an)?|create (?:me )?(?:a|an)?|make (?:me )?(?:a|an)?)\b",
+        r"^(?:color|colour)\s+(?:a\s+)?(?:pic|picture|photo|image)\s+of\b",
     ]
 
     VOICE_PATTERNS = [
@@ -176,6 +178,22 @@ class ToolRouter:
             match = re.search(r"(?:say this|tts|text to speech)\s*[:\-]?\s*(.+)", cleaned, flags=re.IGNORECASE)
             if match:
                 return match.group(1).strip()
+
+        if tool_name == "image":
+            image_patterns = [
+                r"^(?:draw me)\s+",
+                r"^(?:draw)\s+",
+                r"^(?:generate (?:me )?(?:a|an)?)\s+",
+                r"^(?:create (?:me )?(?:a|an)?)\s+",
+                r"^(?:make (?:me )?(?:a|an)?)\s+",
+                r"^(?:color|colour)\s+(?:a\s+)?(?:pic|picture|photo|image)\s+of\s+",
+            ]
+
+            for pattern in image_patterns:
+                if re.search(pattern, lowered, flags=re.IGNORECASE):
+                    extracted = re.sub(pattern, "", cleaned, flags=re.IGNORECASE).strip(" .,:;-")
+                    if extracted:
+                        return extracted
 
         if tool_name == "osint":
             match = re.search(r"(?:whois|rdap|dns|domain lookup|look up this domain)\s+(.+)", cleaned, flags=re.IGNORECASE)

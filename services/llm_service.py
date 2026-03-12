@@ -21,7 +21,10 @@ from core.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OPENAI_API_KEY,
+    OPENAI_IMAGE_FORMAT,
     OPENAI_IMAGE_MODEL,
+    OPENAI_IMAGE_QUALITY,
+    OPENAI_IMAGE_SIZE,
     OPENAI_MODEL,
     OPENAI_TTS_MODEL,
     OPENAI_TTS_VOICE,
@@ -729,7 +732,10 @@ class LLMService:
             response = client.images.generate(
                 model=model,
                 prompt=prompt,
-                size="1024x1024",
+                size=OPENAI_IMAGE_SIZE,
+                quality=OPENAI_IMAGE_QUALITY,
+                output_format=OPENAI_IMAGE_FORMAT,
+                response_format="b64_json",
             )
         except Exception as exc:
             raise RuntimeError(f"Image generation failed via {provider}: {exc}") from exc
@@ -750,7 +756,7 @@ class LLMService:
 
         url = getattr(first, "url", None)
         if url:
-            raise RuntimeError("Image provider returned a URL instead of base64 data, which is not handled in this build.")
+            return {"url": url}
 
         raise RuntimeError("Unsupported image response format.")
 

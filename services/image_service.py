@@ -4,6 +4,7 @@ import base64
 import logging
 import os
 import time
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,10 @@ class ImageService:
             if isinstance(b64_data, str):
                 return self._write_base64_png(b64_data)
 
+            image_url = result.get("url")
+            if isinstance(image_url, str) and image_url.strip():
+                return self._download_image(image_url)
+
         raise RuntimeError("Unsupported image generation result format.")
 
     def _write_base64_png(self, b64_data: str) -> str:
@@ -98,6 +103,24 @@ class ImageService:
             image_bytes = base64.b64decode(b64_data)
         except Exception as exc:
             raise RuntimeError("Failed to decode base64 image data.") from exc
+
+        path.write_bytes(image_bytes)
+        return str(path)
+
+    def _download_image(self, image_url: str) -> str:
+        filename = f"image_{uuid.uuid4().hex}.png"
+        path = self.output_dir / filename
+
+        request = urllib.request.Request(
+            image_url,
+            headers={"User-Agent": "KibaBot/1.0"},
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                image_bytes = response.read()
+        except Exception as exc:
+            raise RuntimeError(f"Failed to download generated image: {exc}") from exc
 
         path.write_bytes(image_bytes)
         return str(path)

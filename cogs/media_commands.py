@@ -48,6 +48,7 @@ class MediaCommands(commands.Cog):
             await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
             return
 
+        await ctx.send("On it, generating that now...")
         async with ctx.typing():
             try:
                 image_path = await self.image_service.generate_image(prompt)
@@ -70,6 +71,7 @@ class MediaCommands(commands.Cog):
             await ctx.send(f"Text is too long. Keep it under {MAX_TTS_LENGTH} characters.")
             return
 
+        await ctx.send("On it, making that audio now...")
         async with ctx.typing():
             try:
                 audio_path = await self.voice_service.text_to_speech(text)
@@ -92,6 +94,7 @@ class MediaCommands(commands.Cog):
             await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
             return
 
+        await ctx.send("On it, starting that video request now...")
         async with ctx.typing():
             try:
                 video_path = await self.video_service.generate_video(prompt)
