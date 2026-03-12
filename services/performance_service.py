@@ -24,6 +24,7 @@ class OperationRecord:
     name: str
     duration_ms: float
     category: str
+    severity: str
     created_at: float
 
 
@@ -87,20 +88,17 @@ class PerformanceTracker:
             name=name,
             duration_ms=round(duration_ms, 2),
             category=category,
+            severity=severity,
             created_at=time.time(),
         )
         self.recent_slow_operations.append(record)
-        message = "[perf] %s_%s name=%s duration_ms=%.2f"
+        message = "[perf] status=success category=%s name=%s duration_ms=%.2f severity=%s"
 
-        if severity == "error":
-            logger.error(message, severity, category, name, duration_ms)
+        if severity == "critical_slow":
+            logger.warning(message, category, name, duration_ms, severity)
             return
 
-        if severity == "warning":
-            logger.warning(message, severity, category, name, duration_ms)
-            return
-
-        logger.info(message, severity, category, name, duration_ms)
+        logger.info(message, category, name, duration_ms, severity)
 
     def _get_severity(self, duration_ms: float, category: str = "service") -> str | None:
         if category == "command":
@@ -113,13 +111,13 @@ class PerformanceTracker:
             error_threshold = SERVICE_ERROR_THRESHOLD_MS
 
         if duration_ms >= error_threshold:
-            return "error"
+            return "critical_slow"
 
         if duration_ms >= warning_threshold:
-            return "warning"
+            return "slow"
 
         if duration_ms >= info_threshold:
-            return "info"
+            return "elevated"
 
         return None
 
@@ -173,6 +171,7 @@ class PerformanceTracker:
                 "category": record.category,
                 "name": record.name,
                 "duration_ms": record.duration_ms,
+                "severity": record.severity,
             }
             for record in list(self.recent_slow_operations)[-5:]
         ]
