@@ -1,7 +1,11 @@
 import asyncio
 import json
-import os
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 from openai import OpenAI
@@ -9,7 +13,18 @@ from openai import OpenAI
 from core.config import (
     AGENTIC_CHAT_ENABLED,
     AGENTIC_CHAT_MAX_TOKENS,
+    AUTOMATIC1111_BASE_URL,
+    AUTOMATIC1111_CFG_SCALE,
+    AUTOMATIC1111_STEPS,
     BOT_TIMEZONE,
+    COMFYUI_BASE_URL,
+    COMFYUI_CFG_SCALE,
+    COMFYUI_DEFAULT_MODEL,
+    COMFYUI_HEIGHT,
+    COMFYUI_SAMPLER_NAME,
+    COMFYUI_SCHEDULER,
+    COMFYUI_STEPS,
+    COMFYUI_WIDTH,
     HF_BASE_URL,
     HF_MODEL,
     HF_TOKEN,
@@ -17,9 +32,11 @@ from core.config import (
     LLM_MAX_TOKENS,
     LLM_PROVIDER,
     LLM_TEMPERATURE,
+    MEDIA_OUTPUT_DIR,
     OLLAMA_API_KEY,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    OLLAMA_REQUEST_TIMEOUT_SECONDS,
     OPENAI_API_KEY,
     OPENAI_IMAGE_MODEL,
     OPENAI_IMAGE_QUALITY,
@@ -27,6 +44,9 @@ from core.config import (
     OPENAI_MODEL,
     OPENAI_TTS_MODEL,
     OPENAI_TTS_VOICE,
+    OPENAI_VIDEO_MODEL,
+    OPENAI_VIDEO_SECONDS,
+    OPENAI_VIDEO_SIZE,
     VOICE_PROVIDER,
 )
 from core.logging_config import get_logger
@@ -100,7 +120,9 @@ class LLMService:
         self.agentic_chat_max_tokens = AGENTIC_CHAT_MAX_TOKENS
         self.performance_tracker = performance_tracker
         self.model_runtime_service = model_runtime_service
-        self._client_cache: dict[str, tuple[OpenAI, str]] = {}
+        self._client_cache: dict[str, OpenAI] = {}
+        self.media_output_dir = Path(MEDIA_OUTPUT_DIR)
+        self.media_output_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_active_model_name(self) -> str:
         if self.model_runtime_service is not None:
@@ -158,50 +180,44 @@ class LLMService:
             {"role": "system", "content": SYSTEM_PROMPT.strip()},
             {"role": "system", "content": preamble},
         ]
-
         messages.extend(history_lines)
         messages.append({"role": "user", "content": user_message})
         return messages
 
-    def _openai_client(self) -> tuple[OpenAI, str]:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        model = OPENAI_MODEL
-        return client, model
+    def _openai_client(self) -> OpenAI:
+        return OpenAI(api_key=OPENAI_API_KEY)
 
-    def _ollama_client(self) -> tuple[OpenAI, str]:
-        client = OpenAI(
+    def _ollama_client(self) -> OpenAI:
+        return OpenAI(
             base_url=OLLAMA_BASE_URL,
             api_key=OLLAMA_API_KEY,
+            timeout=OLLAMA_REQUEST_TIMEOUT_SECONDS,
         )
-        model = OLLAMA_MODEL
-        return client, model
 
-    def _hf_client(self) -> tuple[OpenAI, str]:
-        client = OpenAI(
+    def _hf_client(self) -> OpenAI:
+        return OpenAI(
             base_url=HF_BASE_URL,
             api_key=HF_TOKEN,
         )
-        model = HF_MODEL
-        return client, model
 
-    def _get_client_and_model_for_provider(self, provider: str) -> tuple[OpenAI, str]:
+    def _get_client_for_provider(self, provider: str) -> OpenAI:
         cached = self._client_cache.get(provider)
         if cached is not None:
             return cached
 
         if provider == "openai":
-            client_and_model = self._openai_client()
+            client = self._openai_client()
         elif provider == "ollama":
-            client_and_model = self._ollama_client()
+            client = self._ollama_client()
         elif provider == "hf":
-            client_and_model = self._hf_client()
-        elif provider == "local":
-            raise RuntimeError("Local LLM runtime is registered, but local inference is not wired yet.")
+            client = self._hf_client()
+        elif provider in {"local", "automatic1111", "comfyui"}:
+            raise RuntimeError(f"{provider} does not use the OpenAI SDK client path.")
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
-        self._client_cache[provider] = client_and_model
-        return client_and_model
+        self._client_cache[provider] = client
+        return client
 
     def _build_provider_chain(self) -> List[str]:
         if self.model_runtime_service is not None:
@@ -231,6 +247,94 @@ class LLMService:
         if provider == "hf":
             return HF_MODEL
         return OPENAI_MODEL
+
+    def _extract_usage(self, parsed_response) -> dict[str, int]:
+        usage = getattr(parsed_response, "usage", None)
+        if usage is None:
+            return {}
+
+        return {
+            "input_tokens": getattr(usage, "prompt_tokens", None) or getattr(usage, "input_tokens", None) or 0,
+            "output_tokens": getattr(usage, "completion_tokens", None) or getattr(usage, "output_tokens", None) or 0,
+            "total_tokens": getattr(usage, "total_tokens", None) or 0,
+        }
+
+    def _extract_rate_limits(self, headers) -> dict[str, str]:
+        if not headers:
+            return {}
+
+        mapping = {
+            "requests_limit": headers.get("x-ratelimit-limit-requests", ""),
+            "requests_remaining": headers.get("x-ratelimit-remaining-requests", ""),
+            "requests_reset": headers.get("x-ratelimit-reset-requests", ""),
+            "tokens_limit": headers.get("x-ratelimit-limit-tokens", ""),
+            "tokens_remaining": headers.get("x-ratelimit-remaining-tokens", ""),
+            "tokens_reset": headers.get("x-ratelimit-reset-tokens", ""),
+        }
+        return {key: value for key, value in mapping.items() if value}
+
+    def _record_openai_metrics(self, parsed_response=None, headers=None):
+        if self.model_runtime_service is None:
+            return
+
+        usage = self._extract_usage(parsed_response) if parsed_response is not None else {}
+        rate_limits = self._extract_rate_limits(headers)
+        if usage or rate_limits:
+            self.model_runtime_service.record_openai_metrics(usage=usage, rate_limits=rate_limits)
+
+    def _create_chat_completion(self, provider: str, *, model: str, messages: List[dict], temperature: float, max_tokens: int):
+        client = self._get_client_for_provider(provider)
+        if provider == "openai":
+            raw_response = client.chat.completions.with_raw_response.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            parsed_response = raw_response.parse()
+            self._record_openai_metrics(parsed_response, raw_response.headers)
+            return parsed_response
+
+        return client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    def _post_json(self, url: str, payload: dict, *, timeout: int = 60) -> dict:
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "KibaBot/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"HTTP {exc.code} from {url}: {body}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Request failed for {url}: {exc}") from exc
+
+    def _get_json(self, url: str, *, timeout: int = 60) -> dict:
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": "KibaBot/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"HTTP {exc.code} from {url}: {body}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Request failed for {url}: {exc}") from exc
 
     def _generate_reply_sync(
         self,
@@ -262,10 +366,9 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, _model = self._get_client_and_model_for_provider(provider)
                 model = self._get_model_for_provider(provider, "llm")
-
-                response = client.chat.completions.create(
+                response = self._create_chat_completion(
+                    provider,
                     model=model,
                     messages=messages,
                     temperature=self.temperature,
@@ -477,10 +580,9 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, _model = self._get_client_and_model_for_provider(provider)
                 model = self._get_model_for_provider(provider, "llm")
-
-                response = client.chat.completions.create(
+                response = self._create_chat_completion(
+                    provider,
                     model=model,
                     messages=summary_messages,
                     temperature=0.2,
@@ -577,10 +679,9 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, _model = self._get_client_and_model_for_provider(provider)
                 model = self._get_model_for_provider(provider, "llm")
-
-                response = client.chat.completions.create(
+                response = self._create_chat_completion(
+                    provider,
                     model=model,
                     messages=extraction_messages,
                     temperature=0.1,
@@ -662,10 +763,9 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, _model = self._get_client_and_model_for_provider(provider)
                 model = self._get_model_for_provider(provider, "llm")
-
-                response = client.chat.completions.create(
+                response = self._create_chat_completion(
+                    provider,
                     model=model,
                     messages=messages,
                     temperature=self.temperature if temperature is None else temperature,
@@ -726,26 +826,6 @@ class LLMService:
     async def chat(self, prompt: str) -> str:
         return await self.generate_text(prompt)
 
-    def _get_client_and_model_for_media_provider(self, provider: str, media_type: str) -> tuple[OpenAI, str]:
-        if provider == "openai":
-            client, _model = self._get_client_and_model_for_provider("openai")
-            if media_type == "image":
-                return client, self._get_model_for_provider("openai", "image")
-            if media_type == "voice":
-                return client, OPENAI_TTS_MODEL
-            return client, self._get_active_model_name()
-
-        if provider == "ollama":
-            raise RuntimeError(f"{media_type.title()} generation is not supported for ollama in this build.")
-
-        if provider == "hf":
-            raise RuntimeError(f"{media_type.title()} generation is not supported for hf in this build.")
-
-        if provider == "local":
-            raise RuntimeError(f"Local {media_type} generation is registered, but the local backend is not wired yet.")
-
-        raise ValueError(f"Unsupported media provider: {provider}")
-
     async def generate_image(self, prompt: str) -> dict:
         started_at = time.perf_counter()
         try:
@@ -761,38 +841,213 @@ class LLMService:
         provider = IMAGE_PROVIDER
         if self.model_runtime_service is not None:
             provider = self.model_runtime_service.get_active_image_provider()
-        client, model = self._get_client_and_model_for_media_provider(provider, "image")
+
+        if provider == "openai":
+            client = self._get_client_for_provider("openai")
+            try:
+                raw_response = client.images.with_raw_response.generate(
+                    model=self._get_model_for_provider("openai", "image"),
+                    prompt=prompt,
+                    size=OPENAI_IMAGE_SIZE,
+                    quality=OPENAI_IMAGE_QUALITY,
+                    output_format="png",
+                )
+                response = raw_response.parse()
+                self._record_openai_metrics(response, raw_response.headers)
+            except Exception as exc:
+                raise RuntimeError(f"Image generation failed via openai: {exc}") from exc
+
+            data = getattr(response, "data", None)
+            if not data:
+                raise RuntimeError("Image generation returned no data.")
+
+            first = data[0]
+            b64_json = getattr(first, "b64_json", None)
+            if b64_json:
+                return {"b64_json": b64_json}
+
+            image_base64 = getattr(first, "image_base64", None)
+            if image_base64:
+                return {"image_base64": image_base64}
+
+            url = getattr(first, "url", None)
+            if url:
+                return {"url": url}
+
+            raise RuntimeError("Unsupported OpenAI image response format.")
+
+        if provider in {"automatic1111", "local"}:
+            backend = provider
+            if provider == "local" and self.model_runtime_service is not None:
+                backend = self.model_runtime_service.get_effective_local_image_backend()
+            if backend == "automatic1111":
+                return self._generate_image_automatic1111(prompt)
+            if backend == "comfyui":
+                return self._generate_image_comfyui(prompt)
+            raise RuntimeError("No supported local image backend is configured.")
+
+        if provider == "comfyui":
+            return self._generate_image_comfyui(prompt)
+
+        if provider == "ollama":
+            raise RuntimeError("Ollama image generation is registered in the runtime, but no compatible image-generation endpoint is wired yet.")
+
+        if provider == "hf":
+            raise RuntimeError("Hugging Face image generation is not wired in this build yet.")
+
+        raise RuntimeError(f"Unsupported image provider: {provider}")
+
+    def _generate_image_automatic1111(self, prompt: str) -> dict:
+        if not AUTOMATIC1111_BASE_URL:
+            raise RuntimeError("AUTOMATIC1111_BASE_URL is not configured.")
+
+        model_name = self._get_model_for_provider("automatic1111", "image")
+        payload = {
+            "prompt": prompt,
+            "steps": AUTOMATIC1111_STEPS,
+            "cfg_scale": AUTOMATIC1111_CFG_SCALE,
+            "sampler_name": "Euler a",
+            "width": COMFYUI_WIDTH,
+            "height": COMFYUI_HEIGHT,
+            "override_settings": {"sd_model_checkpoint": model_name},
+        }
+        response = self._post_json(f"{AUTOMATIC1111_BASE_URL.rstrip('/')}/sdapi/v1/txt2img", payload, timeout=240)
+        images = response.get("images", [])
+        if not images:
+            raise RuntimeError("Automatic1111 returned no images.")
+        return {"image_base64": images[0]}
+
+    def _generate_image_comfyui(self, prompt: str) -> dict:
+        if not COMFYUI_BASE_URL:
+            raise RuntimeError("COMFYUI_BASE_URL is not configured.")
+
+        model_name = self._get_model_for_provider("comfyui", "image") or COMFYUI_DEFAULT_MODEL
+        workflow = {
+            "1": {
+                "inputs": {"ckpt_name": model_name},
+                "class_type": "CheckpointLoaderSimple",
+            },
+            "2": {
+                "inputs": {"text": prompt, "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "3": {
+                "inputs": {"text": "", "clip": ["1", 1]},
+                "class_type": "CLIPTextEncode",
+            },
+            "4": {
+                "inputs": {"width": COMFYUI_WIDTH, "height": COMFYUI_HEIGHT, "batch_size": 1},
+                "class_type": "EmptyLatentImage",
+            },
+            "5": {
+                "inputs": {
+                    "seed": int(time.time() * 1000) % 2147483647,
+                    "steps": COMFYUI_STEPS,
+                    "cfg": COMFYUI_CFG_SCALE,
+                    "sampler_name": COMFYUI_SAMPLER_NAME,
+                    "scheduler": COMFYUI_SCHEDULER,
+                    "denoise": 1,
+                    "model": ["1", 0],
+                    "positive": ["2", 0],
+                    "negative": ["3", 0],
+                    "latent_image": ["4", 0],
+                },
+                "class_type": "KSampler",
+            },
+            "6": {
+                "inputs": {"samples": ["5", 0], "vae": ["1", 2]},
+                "class_type": "VAEDecode",
+            },
+            "7": {
+                "inputs": {"filename_prefix": "kiba", "images": ["6", 0]},
+                "class_type": "SaveImage",
+            },
+        }
+
+        submission = self._post_json(
+            f"{COMFYUI_BASE_URL.rstrip('/')}/prompt",
+            {"prompt": workflow, "client_id": f"kiba-{uuid.uuid4().hex}"},
+            timeout=60,
+        )
+        prompt_id = submission.get("prompt_id")
+        if not prompt_id:
+            raise RuntimeError("ComfyUI did not return a prompt_id.")
+
+        history = self._poll_comfyui_history(prompt_id)
+        outputs = history.get(prompt_id, {}).get("outputs", {})
+        for node_output in outputs.values():
+            images = node_output.get("images", [])
+            if not images:
+                continue
+            image = images[0]
+            filename = image.get("filename")
+            subfolder = image.get("subfolder", "")
+            image_type = image.get("type", "output")
+            if filename:
+                query = urllib.parse.urlencode(
+                    {"filename": filename, "subfolder": subfolder, "type": image_type}
+                )
+                url = f"{COMFYUI_BASE_URL.rstrip('/')}/view?{query}"
+                return {"url": url}
+
+        raise RuntimeError("ComfyUI completed the prompt but returned no downloadable image.")
+
+    def _poll_comfyui_history(self, prompt_id: str) -> dict:
+        history_url = f"{COMFYUI_BASE_URL.rstrip('/')}/history/{prompt_id}"
+        last_error = None
+        for _attempt in range(240):
+            try:
+                history = self._get_json(history_url, timeout=30)
+                if history and prompt_id in history:
+                    return history
+            except Exception as exc:
+                last_error = exc
+            time.sleep(1.0)
+
+        if last_error is not None:
+            raise RuntimeError(f"ComfyUI history polling failed: {last_error}") from last_error
+        raise RuntimeError("Timed out waiting for ComfyUI image generation.")
+
+    async def generate_video(self, prompt: str) -> dict:
+        started_at = time.perf_counter()
+        try:
+            return await asyncio.to_thread(self._generate_video_sync, prompt)
+        finally:
+            if self.performance_tracker is not None:
+                self.performance_tracker.record_service_call(
+                    "llm.generate_video",
+                    (time.perf_counter() - started_at) * 1000,
+                )
+
+    def _generate_video_sync(self, prompt: str) -> dict:
+        client = self._get_client_for_provider("openai")
+        try:
+            raw_response = client.videos.with_raw_response.create(
+                model=OPENAI_VIDEO_MODEL,
+                prompt=prompt,
+                seconds=OPENAI_VIDEO_SECONDS,
+                size=OPENAI_VIDEO_SIZE,
+            )
+            created_video = raw_response.parse()
+            self._record_openai_metrics(created_video, raw_response.headers)
+            video = client.videos.poll(created_video.id)
+        except Exception as exc:
+            raise RuntimeError(f"Video generation failed via openai: {exc}") from exc
+
+        if getattr(video, "status", "") != "completed":
+            last_error = getattr(video, "last_error", None)
+            raise RuntimeError(f"Video generation did not complete successfully. Status: {getattr(video, 'status', 'unknown')} | Error: {last_error}")
 
         try:
-            response = client.images.generate(
-                model=model,
-                prompt=prompt,
-                size=OPENAI_IMAGE_SIZE,
-                quality=OPENAI_IMAGE_QUALITY,
-                output_format="png",
-            )
+            content = client.videos.download_content(video.id)
+            video_bytes = content.read()
         except Exception as exc:
-            raise RuntimeError(f"Image generation failed via {provider}: {exc}") from exc
+            raise RuntimeError(f"Video content download failed: {exc}") from exc
 
-        data = getattr(response, "data", None)
-        if not data:
-            raise RuntimeError("Image generation returned no data.")
-
-        first = data[0]
-
-        b64_json = getattr(first, "b64_json", None)
-        if b64_json:
-            return {"b64_json": b64_json}
-
-        image_base64 = getattr(first, "image_base64", None)
-        if image_base64:
-            return {"image_base64": image_base64}
-
-        url = getattr(first, "url", None)
-        if url:
-            return {"url": url}
-
-        raise RuntimeError("Unsupported image response format.")
+        filename = f"video_{uuid.uuid4().hex}.mp4"
+        path = self.media_output_dir / filename
+        path.write_bytes(video_bytes)
+        return {"file_path": str(path)}
 
     async def text_to_speech(self, text: str) -> bytes:
         started_at = time.perf_counter()
@@ -807,11 +1062,14 @@ class LLMService:
 
     def _text_to_speech_sync(self, text: str) -> bytes:
         provider = VOICE_PROVIDER
-        client, model = self._get_client_and_model_for_media_provider(provider, "voice")
+        if provider != "openai":
+            raise RuntimeError(f"Voice generation via {provider} is not wired in this build.")
+
+        client = self._get_client_for_provider("openai")
 
         try:
             response = client.audio.speech.create(
-                model=model,
+                model=OPENAI_TTS_MODEL,
                 voice=OPENAI_TTS_VOICE,
                 input=text,
             )

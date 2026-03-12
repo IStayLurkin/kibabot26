@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-from core.config import OLLAMA_BASE_URL
+from core.config import AUTOMATIC1111_BASE_URL, COMFYUI_BASE_URL, OLLAMA_BASE_URL
 from core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -44,6 +44,14 @@ class HardwareService:
             "ollama_available": ollama_status["available"],
             "ollama_models": ollama_status["models"],
             "ollama_error": ollama_status["error"],
+            "automatic1111_available": self._detect_simple_json_endpoint(
+                AUTOMATIC1111_BASE_URL,
+                "/sdapi/v1/sd-models",
+            ),
+            "comfyui_available": self._detect_simple_json_endpoint(
+                COMFYUI_BASE_URL,
+                "/object_info",
+            ),
         }
 
     def _detect_torch_cuda(self) -> dict:
@@ -151,3 +159,24 @@ class HardwareService:
             "models": names,
             "error": "",
         }
+
+    def _detect_simple_json_endpoint(self, base_url: str, path: str) -> bool:
+        base_url = base_url.strip()
+        if not base_url:
+            return False
+
+        parsed = urlparse(base_url)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+
+        url = f"{parsed.scheme}://{parsed.netloc}{path}"
+        request = urllib.request.Request(url, headers={"User-Agent": "KibaBot/1.0"})
+
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                if response.status < 200 or response.status >= 300:
+                    return False
+                json.loads(response.read().decode("utf-8", errors="replace"))
+                return True
+        except Exception:
+            return False
