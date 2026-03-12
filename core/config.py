@@ -23,3 +23,29 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
+
+IMAGE_ENABLED = os.getenv("IMAGE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+VOICE_ENABLED = os.getenv("VOICE_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+VIDEO_ENABLED = os.getenv("VIDEO_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+CODEGEN_ENABLED = os.getenv("CODEGEN_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+AGENT_ENABLED = os.getenv("AGENT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+OSINT_ENABLED = os.getenv("OSINT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+SAFE_OSINT_ONLY = os.getenv("SAFE_OSINT_ONLY", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "generated_media")
+
+MAX_PROMPT_LENGTH = int(os.getenv("MAX_PROMPT_LENGTH", "1800"))
+MAX_TTS_LENGTH = int(os.getenv("MAX_TTS_LENGTH", "1500"))
+MAX_CODE_REQUEST_LENGTH = int(os.getenv("MAX_CODE_REQUEST_LENGTH", "4000"))
+
+AGENT_DEFAULT_COOLDOWN_SECONDS = int(os.getenv("AGENT_DEFAULT_COOLDOWN_SECONDS", "8"))
+AGENT_MAX_CONTEXT_MESSAGES = int(os.getenv("AGENT_MAX_CONTEXT_MESSAGES", "15"))
+
+OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")
+
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", LLM_PROVIDER).strip().lower()
+VOICE_PROVIDER = os.getenv("VOICE_PROVIDER", LLM_PROVIDER).strip().lower()
+VIDEO_PROVIDER = os.getenv("VIDEO_PROVIDER", LLM_PROVIDER).strip().lower()

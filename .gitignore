@@ -29,3 +29,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Media
+generated_media/

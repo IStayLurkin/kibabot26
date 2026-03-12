@@ -12,8 +12,8 @@ Discord bot with:
 
 ## Setup
 
-Create and activate venv:
+Create and activate venv:   
 
 ```powershell
 py -3.10 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activ

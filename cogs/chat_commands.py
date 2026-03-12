@@ -19,7 +19,7 @@ class ChatCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.user_cooldowns = {}
-        self.llm = LLMService()
+        self.llm = getattr(bot, "llm_service", None) or LLMService()
         self.allowed_chat_channels = BOT_ALLOWED_CHAT_CHANNELS
 
     def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:

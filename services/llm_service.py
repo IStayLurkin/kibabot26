@@ -20,6 +20,11 @@ from core.config import (
     HF_BASE_URL,
     HF_TOKEN,
     HF_MODEL,
+    IMAGE_PROVIDER,
+    VOICE_PROVIDER,
+    OPENAI_IMAGE_MODEL,
+    OPENAI_TTS_MODEL,
+    OPENAI_TTS_VOICE,
 )
 
 
@@ -367,3 +372,150 @@ class LLMService:
             user_message,
             existing_memory,
         )
+
+    def _simple_messages(
+        self,
+        prompt: str,
+        system_prompt: str = "You are Kiba Bot. Be helpful, accurate, and concise.",
+    ) -> List[dict]:
+        current_datetime_context = format_current_datetime_context(self.timezone_name)
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": current_datetime_context},
+            {"role": "user", "content": prompt},
+        ]
+
+    def _complete_messages_sync(
+        self,
+        messages: List[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        errors = []
+        providers = self._build_provider_chain()
+
+        for provider in providers:
+            try:
+                client, model = self._get_client_and_model_for_provider(provider)
+
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=self.temperature if temperature is None else temperature,
+                    max_tokens=self.max_tokens if max_tokens is None else max_tokens,
+                )
+
+                content = response.choices[0].message.content
+                if content and content.strip():
+                    return content.strip()
+
+                errors.append(f"{provider}: empty response")
+
+            except Exception as exc:
+                errors.append(f"{provider}: {type(exc).__name__}: {exc}")
+                continue
+
+        raise RuntimeError("All LLM providers failed | " + " | ".join(errors))
+
+    async def complete_messages(
+        self,
+        messages: List[dict],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        return await asyncio.to_thread(
+            self._complete_messages_sync,
+            messages,
+            temperature,
+            max_tokens,
+        )
+
+    async def generate_text(self, prompt: str) -> str:
+        messages = self._simple_messages(prompt)
+        return await self.complete_messages(messages)
+
+    async def generate_response(self, prompt: str) -> str:
+        return await self.generate_text(prompt)
+
+    async def chat(self, prompt: str) -> str:
+        return await self.generate_text(prompt)
+
+    def _get_client_and_model_for_media_provider(self, provider: str, media_type: str) -> tuple[OpenAI, str]:
+        if provider == "openai":
+            client, _model = self._openai_client()
+            if media_type == "image":
+                return client, OPENAI_IMAGE_MODEL
+            if media_type == "voice":
+                return client, OPENAI_TTS_MODEL
+            return client, self._get_active_model_name()
+
+        if provider == "ollama":
+            raise RuntimeError(f"{media_type.title()} generation is not supported for ollama in this build.")
+
+        if provider == "hf":
+            raise RuntimeError(f"{media_type.title()} generation is not supported for hf in this build.")
+
+        raise ValueError(f"Unsupported media provider: {provider}")
+
+    async def generate_image(self, prompt: str) -> dict:
+        return await asyncio.to_thread(self._generate_image_sync, prompt)
+
+    def _generate_image_sync(self, prompt: str) -> dict:
+        provider = IMAGE_PROVIDER
+        client, model = self._get_client_and_model_for_media_provider(provider, "image")
+
+        try:
+            response = client.images.generate(
+                model=model,
+                prompt=prompt,
+                size="1024x1024",
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Image generation failed via {provider}: {exc}") from exc
+
+        data = getattr(response, "data", None)
+        if not data:
+            raise RuntimeError("Image generation returned no data.")
+
+        first = data[0]
+
+        b64_json = getattr(first, "b64_json", None)
+        if b64_json:
+            return {"b64_json": b64_json}
+
+        image_base64 = getattr(first, "image_base64", None)
+        if image_base64:
+            return {"image_base64": image_base64}
+
+        url = getattr(first, "url", None)
+        if url:
+            raise RuntimeError("Image provider returned a URL instead of base64 data, which is not handled in this build.")
+
+        raise RuntimeError("Unsupported image response format.")
+
+    async def text_to_speech(self, text: str) -> bytes:
+        return await asyncio.to_thread(self._text_to_speech_sync, text)
+
+    def _text_to_speech_sync(self, text: str) -> bytes:
+        provider = VOICE_PROVIDER
+        client, model = self._get_client_and_model_for_media_provider(provider, "voice")
+
+        try:
+            response = client.audio.speech.create(
+                model=model,
+                voice=OPENAI_TTS_VOICE,
+                input=text,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"TTS failed via {provider}: {exc}") from exc
+
+        if hasattr(response, "read"):
+            return response.read()
+
+        if hasattr(response, "content") and isinstance(response.content, bytes):
+            return response.content
+
+        if isinstance(response, bytes):
+            return response
+
+        raise RuntimeError("Unsupported TTS response format.")
