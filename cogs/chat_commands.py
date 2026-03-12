@@ -61,10 +61,10 @@ class ChatCommands(commands.Cog):
     def get_typing_delay(self, content: str) -> float:
         cleaned = (content or "").strip()
         if not cleaned:
-            return 0.6
+            return 0.35
 
-        estimated_seconds = len(cleaned) / 45.0
-        return min(5.0, max(0.6, estimated_seconds))
+        estimated_seconds = len(cleaned) / 90.0
+        return min(5.0, max(0.35, estimated_seconds))
 
     async def send_chat_message(self, destination, reply):
         if isinstance(reply, str):

@@ -21,7 +21,6 @@ from core.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OPENAI_API_KEY,
-    OPENAI_IMAGE_FORMAT,
     OPENAI_IMAGE_MODEL,
     OPENAI_IMAGE_QUALITY,
     OPENAI_IMAGE_SIZE,
@@ -734,8 +733,7 @@ class LLMService:
                 prompt=prompt,
                 size=OPENAI_IMAGE_SIZE,
                 quality=OPENAI_IMAGE_QUALITY,
-                output_format=OPENAI_IMAGE_FORMAT,
-                response_format="b64_json",
+                output_format="png",
             )
         except Exception as exc:
             raise RuntimeError(f"Image generation failed via {provider}: {exc}") from exc

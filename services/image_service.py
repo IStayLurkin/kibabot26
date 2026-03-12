@@ -40,6 +40,7 @@ class ImageService:
                     "Image service is not configured with an image-capable provider."
                 )
 
+            last_error: Exception | None = None
             for method_name in ("generate_image", "image", "create_image"):
                 method = getattr(self.llm_service, method_name, None)
                 if method is None:
@@ -49,19 +50,23 @@ class ImageService:
                     result = await method(prompt=prompt)
                     return self._normalize_result(result)
 
-                except TypeError:
+                except TypeError as exc:
+                    last_error = exc
                     try:
                         result = await method(prompt)
                         return self._normalize_result(result)
-                    except Exception:
+                    except Exception as inner_exc:
+                        last_error = inner_exc
                         logger.exception("Image generation failed via %s", method_name)
 
-                except Exception:
+                except Exception as exc:
+                    last_error = exc
                     logger.exception("Image generation failed via %s", method_name)
 
-            raise RuntimeError(
-                "No compatible image generation method found on llm_service."
-            )
+            if last_error is not None:
+                raise RuntimeError(f"Image generation failed: {last_error}") from last_error
+
+            raise RuntimeError("Image generation is not available on the current llm_service.")
         finally:
             if self.performance_tracker is not None:
                 self.performance_tracker.record_service_call(
