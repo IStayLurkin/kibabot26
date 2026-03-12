@@ -6,6 +6,17 @@ class DevCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    def managed_extensions(self):
+        return [
+            "cogs.expense_commands",
+            "cogs.budget_commands",
+            "cogs.error_handler",
+            "cogs.chat_commands",
+            "cogs.dev_commands",
+            "cogs.media_commands",
+            "cogs.agent_commands",
+        ]
+
     @commands.command()
     @commands.is_owner()
     async def reload(self, ctx, extension: str):
@@ -23,16 +34,9 @@ class DevCommands(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def reloadall(self, ctx):
-        extensions = [
-            "cogs.expense_commands",
-            "cogs.error_handler",
-            "cogs.chat_commands",
-            "cogs.dev_commands",
-        ]
-
         results = []
 
-        for extension in extensions:
+        for extension in self.managed_extensions():
             try:
                 await self.bot.reload_extension(extension)
                 results.append(f"Reloaded `{extension}`")

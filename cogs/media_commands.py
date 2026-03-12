@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import discord
+from discord.ext import commands
+
+from core.config import MAX_PROMPT_LENGTH, MAX_TTS_LENGTH
+from core.feature_flags import IMAGE_ENABLED, VIDEO_ENABLED, VOICE_ENABLED
+from services.image_service import ImageService
+from services.video_service import VideoService
+from services.voice_service import VoiceService
+
+
+class MediaCommands(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        llm_service = getattr(bot, "llm_service", None)
+        self.image_service = ImageService(llm_service=llm_service)
+        self.voice_service = VoiceService(llm_service=llm_service)
+        self.video_service = VideoService(llm_service=llm_service)
+
+    @commands.command(name="image", aliases=["img"])
+    async def image_command(self, ctx: commands.Context, *, prompt: str) -> None:
+        if not IMAGE_ENABLED:
+            await ctx.send("Image generation is disabled.")
+            return
+
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!image a neon fox in the rain`")
+            return
+
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        async with ctx.typing():
+            try:
+                image_path = await self.image_service.generate_image(prompt)
+                await ctx.send(file=discord.File(image_path, filename=Path(image_path).name))
+            except Exception as exc:
+                await ctx.send(f"Image generation failed: {exc}")
+
+    @commands.command(name="tts", aliases=["say"])
+    async def tts_command(self, ctx: commands.Context, *, text: str) -> None:
+        if not VOICE_ENABLED:
+            await ctx.send("Voice generation is disabled.")
+            return
+
+        text = text.strip()
+        if not text:
+            await ctx.send("Provide text to speak. Example: `!tts hello from Kiba Bot`")
+            return
+
+        if len(text) > MAX_TTS_LENGTH:
+            await ctx.send(f"Text is too long. Keep it under {MAX_TTS_LENGTH} characters.")
+            return
+
+        async with ctx.typing():
+            try:
+                audio_path = await self.voice_service.text_to_speech(text)
+                await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+            except Exception as exc:
+                await ctx.send(f"Text-to-speech failed: {exc}")
+
+    @commands.command(name="video", aliases=["animate"])
+    async def video_command(self, ctx: commands.Context, *, prompt: str) -> None:
+        if not VIDEO_ENABLED:
+            await ctx.send("Video generation is disabled.")
+            return
+
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!video a flying dragon over mountains`")
+            return
+
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        async with ctx.typing():
+            try:
+                video_path = await self.video_service.generate_video(prompt)
+                await ctx.send(file=discord.File(video_path, filename=Path(video_path).name))
+            except NotImplementedError as exc:
+                await ctx.send(str(exc))
+            except Exception as exc:
+                await ctx.send(f"Video generation failed: {exc}")
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(MediaCommands(bot))

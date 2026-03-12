@@ -1,5 +1,6 @@
 import aiosqlite
 from database.chat_memory import init_chat_memory_db
+from database.budget_repository import init_budget_table
 
 DB_NAME = "bot.db"
 
@@ -19,6 +20,7 @@ async def init_db():
         await conn.commit()
 
     await init_chat_memory_db()
+    await init_budget_table()
 
 
 async def get_category_totals_for_month(month_prefix: str):

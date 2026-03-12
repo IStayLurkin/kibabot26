@@ -4,7 +4,7 @@ from discord.ext import commands
 
 from database.budget_repository import set_budget, get_budgets, delete_budget
 from database.database import get_category_totals_for_month
-from utils.validators import validate_amount, validate_category
+from services.expense_validation_service import normalize_category, validate_amount
 
 
 class BudgetCommands(commands.Cog):
@@ -26,8 +26,11 @@ class BudgetCommands(commands.Cog):
 
     @budget.command(name="set")
     async def budget_set(self, ctx: commands.Context, category: str, amount: float):
-        category = validate_category(category)
-        amount = validate_amount(amount)
+        category = normalize_category(category)
+        is_valid, error_message = validate_amount(amount)
+        if not is_valid:
+            await ctx.send(error_message)
+            return
 
         await set_budget(category, amount)
 
@@ -40,7 +43,7 @@ class BudgetCommands(commands.Cog):
 
     @budget.command(name="delete")
     async def budget_delete(self, ctx: commands.Context, category: str):
-        category = validate_category(category)
+        category = normalize_category(category)
         await delete_budget(category)
 
         embed = discord.Embed(

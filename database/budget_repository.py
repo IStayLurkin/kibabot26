@@ -1,6 +1,6 @@
 import aiosqlite
 
-DB_PATH = "expenses.db"
+DB_PATH = "bot.db"
 
 
 async def init_budget_table():

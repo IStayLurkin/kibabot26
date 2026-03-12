@@ -35,6 +35,9 @@ class ExpenseBot(commands.Bot):
         logger.info("setup_hook: loading expense commands cog...")
         await self.load_extension("cogs.expense_commands")
 
+        logger.info("setup_hook: loading budget commands cog...")
+        await self.load_extension("cogs.budget_commands")
+
         logger.info("setup_hook: loading error handler cog...")
         await self.load_extension("cogs.error_handler")
 
