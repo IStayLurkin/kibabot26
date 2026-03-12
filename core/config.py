@@ -8,6 +8,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 BOT_PREFIX = os.getenv("BOT_PREFIX", BOT_DEFAULT_PREFIX)
 BOT_TIMEZONE = os.getenv("BOT_TIMEZONE", "America/Los_Angeles")
+CUDA_PREFERRED = os.getenv("CUDA_PREFERRED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.8"))

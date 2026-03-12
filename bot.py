@@ -12,8 +12,11 @@ from core.config import (
 from core.logging_config import setup_logging, get_logger
 from database.database import init_db
 from services.codegen_service import CodegenService
+from services.command_help_service import CommandHelpService
+from services.hardware_service import HardwareService
 from services.image_service import ImageService
 from services.llm_service import LLMService
+from services.model_runtime_service import ModelRuntimeService
 from services.osint_service import OSINTService
 from services.performance_service import PerformanceTracker
 from services.video_service import VideoService
@@ -39,6 +42,9 @@ class ExpenseBot(commands.Bot):
         self.video_service = None
         self.codegen_service = None
         self.osint_service = None
+        self.hardware_service = None
+        self.model_runtime_service = None
+        self.command_help_service = None
         self.start_time = time.perf_counter()
 
     async def setup_hook(self):
@@ -46,7 +52,17 @@ class ExpenseBot(commands.Bot):
             await init_db()
 
         service_started_at = time.perf_counter()
-        self.llm_service = LLMService(performance_tracker=self.performance_tracker)
+        self.hardware_service = HardwareService()
+        self.model_runtime_service = ModelRuntimeService(
+            hardware_service=self.hardware_service,
+            performance_tracker=self.performance_tracker,
+        )
+        await self.model_runtime_service.initialize()
+        self.command_help_service = CommandHelpService()
+        self.llm_service = LLMService(
+            performance_tracker=self.performance_tracker,
+            model_runtime_service=self.model_runtime_service,
+        )
         self.image_service = ImageService(
             llm_service=self.llm_service,
             performance_tracker=self.performance_tracker,
@@ -77,6 +93,7 @@ class ExpenseBot(commands.Bot):
             "cogs.dev_commands",
             "cogs.media_commands",
             "cogs.agent_commands",
+            "cogs.runtime_commands",
         ]
 
         for extension in extensions:
@@ -128,6 +145,8 @@ class ExpenseBot(commands.Bot):
             len(startup_snapshot["services"]),
             len(startup_snapshot["commands"]),
         )
+        if self.model_runtime_service is not None:
+            logger.debug("[startup] runtime_state=%s", self.model_runtime_service.get_runtime_snapshot())
         logger.debug("Loaded cogs: %s", ", ".join(loaded_cogs))
 
 

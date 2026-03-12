@@ -56,6 +56,9 @@ class ChatCommands(commands.Cog):
             "video_service": getattr(self.bot, "video_service", None),
             "codegen_service": getattr(self.bot, "codegen_service", None),
             "osint_service": getattr(self.bot, "osint_service", None),
+            "model_runtime_service": getattr(self.bot, "model_runtime_service", None),
+            "command_help_service": getattr(self.bot, "command_help_service", None),
+            "bot": self.bot,
         }
 
     def get_typing_delay(self, content: str) -> float:
@@ -147,6 +150,13 @@ class ChatCommands(commands.Cog):
 
     @commands.command()
     async def about(self, ctx):
+        runtime_service = getattr(self.bot, "model_runtime_service", None)
+        provider = self.llm.provider
+        model_name = self.llm._get_active_model_name()
+        if runtime_service is not None:
+            provider = runtime_service.get_active_llm_provider()
+            model_name = runtime_service.get_active_llm_model()
+
         embed = discord.Embed(
             title="About Kiba Bot",
             description="A modular Discord bot with expense tracking and chat features.",
@@ -154,8 +164,8 @@ class ChatCommands(commands.Cog):
         )
         embed.add_field(name="Prefix", value="`!`", inline=True)
         embed.add_field(name="Mode", value="Prefix commands + agentic chat", inline=True)
-        embed.add_field(name="Provider", value=f"`{self.llm.provider}`", inline=True)
-        embed.add_field(name="Model", value=f"`{self.llm._get_active_model_name()}`", inline=True)
+        embed.add_field(name="Provider", value=f"`{provider}`", inline=True)
+        embed.add_field(name="Model", value=f"`{model_name}`", inline=True)
         embed.add_field(
             name="Features",
             value="Expense tracking, memory, summaries, intent-aware chat, lightweight planning, tool routing, and media/code helpers",

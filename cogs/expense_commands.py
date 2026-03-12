@@ -104,8 +104,8 @@ class ExpenseCommands(commands.Cog):
 
         await ctx.send(embed=build_categories_embed(rows))
 
-    @commands.command(aliases=["h"])
-    async def help(self, ctx):
+    @commands.command(name="expensehelp", aliases=["expense_help"])
+    async def expense_help(self, ctx):
         await ctx.send(embed=build_help_embed())
 
     @commands.command(aliases=["del", "remove"])

@@ -224,6 +224,60 @@ async def generate_dynamic_reply(
     services.setdefault("llm", llm)
 
     try:
+        model_runtime_service = services.get("model_runtime_service")
+        command_help_service = services.get("command_help_service")
+        bot = services.get("bot")
+
+        if model_runtime_service is not None:
+            runtime_answer = model_runtime_service.answer_natural_language_query(user_text)
+            if runtime_answer is not None:
+                return ChatReply(
+                    content=runtime_answer,
+                    intent="question_answering",
+                    response_mode="direct",
+                    goal="answer runtime model question",
+                )
+
+            lowered = user_text.strip().lower()
+            if lowered in {"are you using cuda", "are you using gpu", "what device are you using", "are you using my gpu"}:
+                return ChatReply(
+                    content=await model_runtime_service.get_hardware_status_text(),
+                    intent="question_answering",
+                    response_mode="direct",
+                    goal="answer runtime hardware question",
+                )
+
+            if "what models are available" in lowered or "what image generators are available" in lowered:
+                model_type = "image" if "image" in lowered or "generator" in lowered else "llm"
+                return ChatReply(
+                    content=await model_runtime_service.get_model_list_text(model_type),
+                    intent="question_answering",
+                    response_mode="direct",
+                    goal="list runtime models",
+                )
+
+            if "what local models are available" in lowered:
+                models = await model_runtime_service.get_models("llm")
+                local_models = [model for model in models if model["provider"] == "local"]
+                if not local_models:
+                    content = "No local LLM models are registered right now."
+                else:
+                    content = "Local LLM models:\n" + "\n".join(f"- {model['model_name']}" for model in local_models)
+                return ChatReply(
+                    content=content,
+                    intent="question_answering",
+                    response_mode="direct",
+                    goal="list local llm models",
+                )
+
+        if command_help_service is not None and bot is not None and command_help_service.matches_natural_language_help(user_text):
+            return ChatReply(
+                content=await command_help_service.build_command_overview(bot),
+                intent="question_answering",
+                response_mode="direct",
+                goal="list available commands",
+            )
+
         if is_date_time_question(user_text):
             return ChatReply(
                 content=build_current_datetime_reply(user_text, llm.timezone_name),

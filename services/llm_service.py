@@ -91,7 +91,7 @@ def _extract_json_object(content: str) -> dict | None:
 
 
 class LLMService:
-    def __init__(self, performance_tracker=None):
+    def __init__(self, performance_tracker=None, model_runtime_service=None):
         self.provider = LLM_PROVIDER
         self.temperature = LLM_TEMPERATURE
         self.max_tokens = LLM_MAX_TOKENS
@@ -99,9 +99,13 @@ class LLMService:
         self.agentic_chat_enabled = AGENTIC_CHAT_ENABLED
         self.agentic_chat_max_tokens = AGENTIC_CHAT_MAX_TOKENS
         self.performance_tracker = performance_tracker
+        self.model_runtime_service = model_runtime_service
         self._client_cache: dict[str, tuple[OpenAI, str]] = {}
 
     def _get_active_model_name(self) -> str:
+        if self.model_runtime_service is not None:
+            self.provider = self.model_runtime_service.get_active_llm_provider()
+            return self.model_runtime_service.get_active_llm_model()
         if self.provider == "openai":
             return OPENAI_MODEL
         if self.provider == "ollama":
@@ -191,6 +195,8 @@ class LLMService:
             client_and_model = self._ollama_client()
         elif provider == "hf":
             client_and_model = self._hf_client()
+        elif provider == "local":
+            raise RuntimeError("Local LLM runtime is registered, but local inference is not wired yet.")
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
@@ -198,12 +204,33 @@ class LLMService:
         return client_and_model
 
     def _build_provider_chain(self) -> List[str]:
+        if self.model_runtime_service is not None:
+            active_provider = self.model_runtime_service.get_active_llm_provider()
+            self.provider = active_provider
+            return [active_provider]
+
         chains = {
             "openai": ["openai", "hf", "ollama"],
             "hf": ["hf", "openai", "ollama"],
             "ollama": ["ollama", "openai", "hf"],
         }
         return chains.get(self.provider, ["openai", "hf", "ollama"])
+
+    def _get_model_for_provider(self, provider: str, media_type: str = "llm") -> str:
+        if self.model_runtime_service is not None:
+            if media_type == "image":
+                return self.model_runtime_service.get_active_image_model()
+            return self.model_runtime_service.get_active_llm_model()
+
+        if media_type == "image":
+            return OPENAI_IMAGE_MODEL
+        if provider == "openai":
+            return OPENAI_MODEL
+        if provider == "ollama":
+            return OLLAMA_MODEL
+        if provider == "hf":
+            return HF_MODEL
+        return OPENAI_MODEL
 
     def _generate_reply_sync(
         self,
@@ -235,7 +262,8 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, model = self._get_client_and_model_for_provider(provider)
+                client, _model = self._get_client_and_model_for_provider(provider)
+                model = self._get_model_for_provider(provider, "llm")
 
                 response = client.chat.completions.create(
                     model=model,
@@ -449,7 +477,8 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, model = self._get_client_and_model_for_provider(provider)
+                client, _model = self._get_client_and_model_for_provider(provider)
+                model = self._get_model_for_provider(provider, "llm")
 
                 response = client.chat.completions.create(
                     model=model,
@@ -548,7 +577,8 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, model = self._get_client_and_model_for_provider(provider)
+                client, _model = self._get_client_and_model_for_provider(provider)
+                model = self._get_model_for_provider(provider, "llm")
 
                 response = client.chat.completions.create(
                     model=model,
@@ -632,7 +662,8 @@ class LLMService:
         for provider in providers:
             started_at = time.perf_counter()
             try:
-                client, model = self._get_client_and_model_for_provider(provider)
+                client, _model = self._get_client_and_model_for_provider(provider)
+                model = self._get_model_for_provider(provider, "llm")
 
                 response = client.chat.completions.create(
                     model=model,
@@ -699,7 +730,7 @@ class LLMService:
         if provider == "openai":
             client, _model = self._get_client_and_model_for_provider("openai")
             if media_type == "image":
-                return client, OPENAI_IMAGE_MODEL
+                return client, self._get_model_for_provider("openai", "image")
             if media_type == "voice":
                 return client, OPENAI_TTS_MODEL
             return client, self._get_active_model_name()
@@ -709,6 +740,9 @@ class LLMService:
 
         if provider == "hf":
             raise RuntimeError(f"{media_type.title()} generation is not supported for hf in this build.")
+
+        if provider == "local":
+            raise RuntimeError(f"Local {media_type} generation is registered, but the local backend is not wired yet.")
 
         raise ValueError(f"Unsupported media provider: {provider}")
 
@@ -725,6 +759,8 @@ class LLMService:
 
     def _generate_image_sync(self, prompt: str) -> dict:
         provider = IMAGE_PROVIDER
+        if self.model_runtime_service is not None:
+            provider = self.model_runtime_service.get_active_image_provider()
         client, model = self._get_client_and_model_for_media_provider(provider, "image")
 
         try:

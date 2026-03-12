@@ -15,6 +15,7 @@ class DevCommands(commands.Cog):
             "cogs.dev_commands",
             "cogs.media_commands",
             "cogs.agent_commands",
+            "cogs.runtime_commands",
         ]
 
     @commands.command()
@@ -50,25 +51,12 @@ class DevCommands(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def whichmodel(self, ctx):
-        chat_cog = self.bot.get_cog("ChatCommands")
-        if chat_cog is None:
-            await ctx.send("`ChatCommands` is not loaded.")
+        runtime_service = getattr(self.bot, "model_runtime_service", None)
+        if runtime_service is None:
+            await ctx.send("Runtime model service is not available.")
             return
 
-        llm = getattr(chat_cog, "llm", None)
-        if llm is None:
-            await ctx.send("LLM service is not available.")
-            return
-
-        try:
-            model_name = llm._get_active_model_name()
-        except Exception as exc:
-            await ctx.send(
-                f"Could not read active model: `{type(exc).__name__}: {exc}`"
-            )
-            return
-
-        await ctx.send(f"Provider: `{llm.provider}` | Model: `{model_name}`")
+        await ctx.send(runtime_service.get_current_model_text("llm"))
 
     @commands.command()
     @commands.is_owner()
