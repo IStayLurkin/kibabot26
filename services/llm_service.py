@@ -131,6 +131,65 @@ def _sanitize_model_text(content: str) -> str:
     return cleaned.strip()
 
 
+def _extract_message_text(message) -> str:
+    if message is None:
+        return ""
+
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        cleaned = _sanitize_model_text(content)
+        if cleaned:
+            return cleaned
+
+    if isinstance(content, list):
+        text_parts = []
+        for item in content:
+            if isinstance(item, str):
+                text_parts.append(item)
+                continue
+            if isinstance(item, dict):
+                if isinstance(item.get("text"), str):
+                    text_parts.append(item["text"])
+                elif item.get("type") == "text" and isinstance(item.get("content"), str):
+                    text_parts.append(item["content"])
+                continue
+
+            item_text = getattr(item, "text", None)
+            if isinstance(item_text, str):
+                text_parts.append(item_text)
+
+        cleaned = _sanitize_model_text("\n".join(part for part in text_parts if part))
+        if cleaned:
+            return cleaned
+
+    for attr_name in ("reasoning_content", "text", "output_text"):
+        attr_value = getattr(message, attr_name, "")
+        if isinstance(attr_value, str):
+            cleaned = _sanitize_model_text(attr_value)
+            if cleaned:
+                return cleaned
+
+    if hasattr(message, "model_dump"):
+        try:
+            dumped = message.model_dump()
+            if isinstance(dumped, dict):
+                for key in ("content", "reasoning_content", "text", "output_text"):
+                    value = dumped.get(key, "")
+                    if isinstance(value, str):
+                        cleaned = _sanitize_model_text(value)
+                        if cleaned:
+                            return cleaned
+                    if isinstance(value, list):
+                        joined = "\n".join(str(item.get("text", "")) for item in value if isinstance(item, dict))
+                        cleaned = _sanitize_model_text(joined)
+                        if cleaned:
+                            return cleaned
+        except Exception:
+            pass
+
+    return ""
+
+
 class LLMService:
     def __init__(self, performance_tracker=None, model_runtime_service=None):
         self.provider = LLM_PROVIDER
@@ -402,7 +461,7 @@ class LLMService:
                         (time.perf_counter() - started_at) * 1000,
                     )
 
-                content = _sanitize_model_text(response.choices[0].message.content)
+                content = _extract_message_text(response.choices[0].message)
                 if content and content.strip():
                     return content.strip()
 
@@ -617,7 +676,7 @@ class LLMService:
                         (time.perf_counter() - started_at) * 1000,
                     )
 
-                content = _sanitize_model_text(response.choices[0].message.content)
+                content = _extract_message_text(response.choices[0].message)
                 if content and content.strip():
                     return content.strip()
 
@@ -716,7 +775,7 @@ class LLMService:
                         (time.perf_counter() - started_at) * 1000,
                     )
 
-                content = _sanitize_model_text(response.choices[0].message.content)
+                content = _extract_message_text(response.choices[0].message)
                 if not content or not content.strip():
                     errors.append(f"{provider}: empty extraction")
                     continue
@@ -800,7 +859,7 @@ class LLMService:
                         (time.perf_counter() - started_at) * 1000,
                     )
 
-                content = _sanitize_model_text(response.choices[0].message.content)
+                content = _extract_message_text(response.choices[0].message)
                 if content and content.strip():
                     return content.strip()
 

@@ -447,7 +447,7 @@ async def generate_dynamic_reply(
                     tool_name=route_decision.tool_name,
                 )
         except Exception as exc:
-            logger.exception("LLM error: %s", exc)
+            logger.warning("Reply fallback: %s", exc)
 
         fallback = get_rule_based_fallback(
             display_name,

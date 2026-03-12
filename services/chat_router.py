@@ -18,6 +18,20 @@ def is_expense_topic(text: str) -> bool:
     return any(word in text for word in expense_words)
 
 
+def is_private_info_request(text: str) -> bool:
+    private_info_phrases = [
+        "what is my ip",
+        "what's my ip",
+        "tell me my ip",
+        "what is my address",
+        "what's my address",
+        "what is my location",
+        "where am i",
+        "what device am i on",
+    ]
+    return any(phrase in text for phrase in private_info_phrases)
+
+
 def get_help_response() -> str:
     return "Use `!help` for expense commands or `!helpchat` for chat commands."
 
@@ -113,13 +127,13 @@ def get_rule_based_fallback(
     if "ping" in text:
         return "Use `!ping` to check bot latency."
 
+    if is_private_info_request(text):
+        return "I can't see your IP address, exact location, or device details through Discord chat."
+
     if remembered_note:
         return f"I remember this about you: {remembered_note}"
 
     if remembered_preference:
         return f"I remember your preference: {remembered_preference}"
-
-    if conversation_summary:
-        return f"From our earlier conversation, I remember: {conversation_summary}"
 
     return "I heard you, but I do not know how to respond to that yet. Try `!helpchat` or `!help`."
