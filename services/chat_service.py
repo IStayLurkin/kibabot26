@@ -1,18 +1,213 @@
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass, field
+
+from core.constants import CHAT_RECENT_MESSAGE_LIMIT
+from core.logging_config import get_logger
 from database.chat_memory import (
+    get_conversation_state,
+    get_conversation_summary,
     get_recent_chat_messages,
     get_user_memory,
-    get_conversation_summary,
+    set_conversation_state,
 )
-from services.memory_service import format_memory
 from services.chat_router import get_rule_based_fallback
+from services.memory_service import format_memory
 from services.time_service import (
-    is_date_time_question,
     build_current_datetime_reply,
+    is_date_time_question,
 )
-from core.logging_config import get_logger
-from core.constants import CHAT_RECENT_MESSAGE_LIMIT
+from services.tool_router import (
+    INTENT_CODE_GENERATION_ANALYSIS,
+    INTENT_TOOL_USE_REQUEST,
+    ToolRouter,
+)
 
 logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class ChatReply:
+    content: str
+    file_paths: list[str] = field(default_factory=list)
+    intent: str = ""
+    response_mode: str = "direct"
+    goal: str = ""
+    tool_name: str = ""
+
+
+def _build_tool_context(route_decision, conversation_state: dict) -> str:
+    parts = []
+
+    if route_decision.tool_name:
+        parts.append(f"requested tool: {route_decision.tool_name}")
+    if route_decision.tool_input:
+        parts.append(f"tool input: {route_decision.tool_input}")
+    if conversation_state.get("last_tool"):
+        parts.append(f"last tool used: {conversation_state['last_tool']}")
+    if conversation_state.get("pending_question"):
+        parts.append(f"pending question: {conversation_state['pending_question']}")
+
+    return " | ".join(parts)
+
+
+def _compose_agent_answer(plan: dict) -> str:
+    answer = str(plan.get("answer", "")).strip()
+    next_steps = plan.get("next_steps", [])
+
+    if not isinstance(next_steps, list):
+        next_steps = []
+
+    cleaned_steps = [str(step).strip() for step in next_steps if str(step).strip()]
+    if cleaned_steps:
+        answer = answer.rstrip()
+        answer += "\n\nNext steps:\n" + "\n".join(f"- {step}" for step in cleaned_steps[:3])
+
+    return answer.strip()
+
+
+def _record_tracker_duration(services: dict | None, name: str, started_at: float) -> None:
+    services = services or {}
+    llm = services.get("llm")
+    tracker = getattr(llm, "performance_tracker", None)
+    if tracker is None:
+        return
+
+    tracker.record_service_call(name, (time.perf_counter() - started_at) * 1000)
+
+
+async def _run_tool(tool_name: str, tool_input: str, services: dict | None) -> ChatReply | None:
+    services = services or {}
+    cleaned_input = tool_input.strip()
+
+    if tool_name == "osint":
+        osint_service = services.get("osint_service")
+        if osint_service is None:
+            return ChatReply(
+                content="I can do domain intelligence lookups, but the OSINT service is not available right now.",
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="osint",
+            )
+
+        lowered = cleaned_input.lower()
+        if "dns" in lowered:
+            result = await osint_service.dns_lookup(cleaned_input)
+        elif "ssl" in lowered:
+            result = await osint_service.ssl_lookup(cleaned_input)
+        elif "whois" in lowered or "rdap" in lowered:
+            domain = cleaned_input.split()[-1]
+            result = await osint_service.whois_lookup(domain)
+        elif "." in cleaned_input and " " not in cleaned_input:
+            whois_result = await osint_service.whois_lookup(cleaned_input)
+            dns_result = await osint_service.dns_lookup(cleaned_input)
+            result = f"{whois_result}\n\n{dns_result}"
+        else:
+            result = await osint_service.lookup_query(cleaned_input)
+
+        return ChatReply(
+            content=result,
+            intent=INTENT_TOOL_USE_REQUEST,
+            response_mode="tool",
+            goal=cleaned_input,
+            tool_name="osint",
+        )
+
+    if tool_name == "code":
+        codegen_service = services.get("codegen_service")
+        if codegen_service is None:
+            return ChatReply(
+                content="I can help with code, but the code service is not available right now.",
+                intent=INTENT_CODE_GENERATION_ANALYSIS,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="code",
+            )
+
+        result = await codegen_service.generate_code_help(cleaned_input)
+        return ChatReply(
+            content=result,
+            intent=INTENT_CODE_GENERATION_ANALYSIS,
+            response_mode="tool",
+            goal=cleaned_input,
+            tool_name="code",
+        )
+
+    if tool_name == "image":
+        image_service = services.get("image_service")
+        if image_service is None:
+            return ChatReply(
+                content="I can generate images, but the image service is not available right now.",
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="image",
+            )
+
+        image_path = await image_service.generate_image(cleaned_input)
+        return ChatReply(
+            content="Here’s the image I generated.",
+            file_paths=[image_path],
+            intent=INTENT_TOOL_USE_REQUEST,
+            response_mode="tool",
+            goal=cleaned_input,
+            tool_name="image",
+        )
+
+    if tool_name == "voice":
+        voice_service = services.get("voice_service")
+        if voice_service is None:
+            return ChatReply(
+                content="I can generate audio, but the voice service is not available right now.",
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="voice",
+            )
+
+        audio_path = await voice_service.text_to_speech(cleaned_input)
+        return ChatReply(
+            content="Here’s the audio version.",
+            file_paths=[audio_path],
+            intent=INTENT_TOOL_USE_REQUEST,
+            response_mode="tool",
+            goal=cleaned_input,
+            tool_name="voice",
+        )
+
+    if tool_name == "video":
+        video_service = services.get("video_service")
+        if video_service is None:
+            return ChatReply(
+                content="I can handle video requests later, but the video service is not available right now.",
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="video",
+            )
+
+        try:
+            video_path = await video_service.generate_video(cleaned_input)
+            return ChatReply(
+                content="Here’s the generated video.",
+                file_paths=[video_path],
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="video",
+            )
+        except NotImplementedError as exc:
+            return ChatReply(
+                content=str(exc),
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="video",
+            )
+
+    return None
 
 
 async def generate_dynamic_reply(
@@ -22,32 +217,186 @@ async def generate_dynamic_reply(
     channel_id: str,
     session_id: int,
     user_text: str,
-) -> str:
-    if is_date_time_question(user_text):
-        return build_current_datetime_reply(user_text, llm.timezone_name)
-
-    recent_messages = await get_recent_chat_messages(session_id, limit=CHAT_RECENT_MESSAGE_LIMIT)
-    memory_rows = await get_user_memory(user_id)
-    memory = format_memory(memory_rows)
-    conversation_summary = await get_conversation_summary(user_id, channel_id)
+    services: dict | None = None,
+) -> ChatReply:
+    started_at = time.perf_counter()
+    services = services or {}
+    services.setdefault("llm", llm)
 
     try:
-        reply = await llm.generate_reply(
-            user_display_name=display_name,
-            user_message=user_text,
+        if is_date_time_question(user_text):
+            return ChatReply(
+                content=build_current_datetime_reply(user_text, llm.timezone_name),
+                intent="question_answering",
+                response_mode="direct",
+                goal="answer current date/time question",
+            )
+
+        recent_messages = await get_recent_chat_messages(session_id, limit=CHAT_RECENT_MESSAGE_LIMIT)
+        memory_rows = await get_user_memory(user_id)
+        memory = format_memory(memory_rows)
+        conversation_summary = await get_conversation_summary(user_id, channel_id)
+        conversation_state = await get_conversation_state(user_id, channel_id)
+
+        router = ToolRouter()
+        route_decision = router.route(user_text)
+        conversation_goal = conversation_state.get("goal") or user_text.strip()
+        tool_context = _build_tool_context(route_decision, conversation_state)
+
+        if route_decision.tool_name:
+            if route_decision.should_ask_clarifying_question:
+                question = f"What exactly do you want me to do with the {route_decision.tool_name} tool?"
+                await set_conversation_state(
+                    user_id,
+                    channel_id,
+                    goal=conversation_goal,
+                    last_intent=route_decision.intent,
+                    response_mode="clarify",
+                    last_tool=route_decision.tool_name,
+                    pending_question=question,
+                )
+                return ChatReply(
+                    content=question,
+                    intent=route_decision.intent,
+                    response_mode="clarify",
+                    goal=conversation_goal,
+                    tool_name=route_decision.tool_name,
+                )
+
+            try:
+                tool_reply = await _run_tool(route_decision.tool_name, route_decision.tool_input, services)
+                if tool_reply is not None:
+                    await set_conversation_state(
+                        user_id,
+                        channel_id,
+                        goal=tool_reply.goal or conversation_goal,
+                        last_intent=tool_reply.intent or route_decision.intent,
+                        response_mode=tool_reply.response_mode,
+                        last_tool=route_decision.tool_name,
+                        pending_question="",
+                    )
+                    return tool_reply
+            except Exception as exc:
+                logger.exception("Tool execution error: %s", exc)
+
+        if route_decision.requires_agent and getattr(llm, "agentic_chat_enabled", True):
+            try:
+                plan = await llm.generate_agent_reply(
+                    user_display_name=display_name,
+                    user_message=user_text,
+                    memory=memory,
+                    recent_messages=recent_messages,
+                    conversation_summary=conversation_summary,
+                    intent_category=route_decision.intent,
+                    conversation_goal=conversation_goal,
+                    pending_question=conversation_state.get("pending_question", ""),
+                    tool_context=tool_context,
+                )
+
+                state_update = plan.get("state_update", {})
+                if not isinstance(state_update, dict):
+                    state_update = {}
+
+                if plan.get("needs_clarification"):
+                    clarification_question = str(plan.get("clarifying_question", "")).strip() or "What part do you want help with first?"
+                    await set_conversation_state(
+                        user_id,
+                        channel_id,
+                        goal=str(state_update.get("goal", "")).strip() or conversation_goal,
+                        last_intent=str(plan.get("intent", route_decision.intent)).strip(),
+                        response_mode="clarify",
+                        last_tool=str(plan.get("tool_suggestion", route_decision.tool_name)).strip(),
+                        pending_question=clarification_question,
+                    )
+                    return ChatReply(
+                        content=clarification_question,
+                        intent=str(plan.get("intent", route_decision.intent)).strip(),
+                        response_mode="clarify",
+                        goal=str(state_update.get("goal", "")).strip() or conversation_goal,
+                        tool_name=str(plan.get("tool_suggestion", route_decision.tool_name)).strip(),
+                    )
+
+                answer = _compose_agent_answer(plan)
+                updated_goal = str(state_update.get("goal", "")).strip() or str(plan.get("goal", "")).strip() or conversation_goal
+                pending_question = str(state_update.get("pending_question", "")).strip()
+                tool_name = str(plan.get("tool_suggestion", route_decision.tool_name)).strip()
+                response_mode = str(plan.get("response_mode", "agentic")).strip() or "agentic"
+                intent = str(plan.get("intent", route_decision.intent)).strip() or route_decision.intent
+
+                await set_conversation_state(
+                    user_id,
+                    channel_id,
+                    goal=updated_goal,
+                    last_intent=intent,
+                    response_mode=response_mode,
+                    last_tool=tool_name,
+                    pending_question=pending_question,
+                )
+
+                return ChatReply(
+                    content=answer,
+                    intent=intent,
+                    response_mode=response_mode,
+                    goal=updated_goal,
+                    tool_name=tool_name,
+                )
+            except Exception as exc:
+                logger.exception("Agentic reply error: %s", exc)
+
+        try:
+            reply = await llm.generate_reply(
+                user_display_name=display_name,
+                user_message=user_text,
+                memory=memory,
+                recent_messages=recent_messages,
+                conversation_summary=conversation_summary,
+                intent_category=route_decision.intent,
+                conversation_goal=conversation_goal,
+                response_mode="direct",
+                tool_context=tool_context,
+            )
+            if reply and reply.strip():
+                await set_conversation_state(
+                    user_id,
+                    channel_id,
+                    goal=conversation_goal,
+                    last_intent=route_decision.intent,
+                    response_mode="direct",
+                    last_tool=route_decision.tool_name,
+                    pending_question="",
+                )
+                return ChatReply(
+                    content=reply.strip(),
+                    intent=route_decision.intent,
+                    response_mode="direct",
+                    goal=conversation_goal,
+                    tool_name=route_decision.tool_name,
+                )
+        except Exception as exc:
+            logger.exception("LLM error: %s", exc)
+
+        fallback = get_rule_based_fallback(
+            display_name,
+            user_text,
             memory=memory,
             recent_messages=recent_messages,
             conversation_summary=conversation_summary,
         )
-        if reply and reply.strip():
-            return reply.strip()
-    except Exception as exc:
-        logger.exception("LLM error: %s", exc)
-
-    return get_rule_based_fallback(
-        display_name,
-        user_text,
-        memory=memory,
-        recent_messages=recent_messages,
-        conversation_summary=conversation_summary,
-    )
+        await set_conversation_state(
+            user_id,
+            channel_id,
+            goal=conversation_goal,
+            last_intent=route_decision.intent,
+            response_mode="fallback",
+            last_tool=route_decision.tool_name,
+            pending_question="",
+        )
+        return ChatReply(
+            content=fallback,
+            intent=route_decision.intent,
+            response_mode="fallback",
+            goal=conversation_goal,
+            tool_name=route_decision.tool_name,
+        )
+    finally:
+        _record_tracker_duration(services, "chat.generate_dynamic_reply", started_at)

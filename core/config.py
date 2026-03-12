@@ -12,6 +12,8 @@ BOT_TIMEZONE = os.getenv("BOT_TIMEZONE", "America/Los_Angeles")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.8"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "220"))
+AGENTIC_CHAT_ENABLED = os.getenv("AGENTIC_CHAT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+AGENTIC_CHAT_MAX_TOKENS = int(os.getenv("AGENTIC_CHAT_MAX_TOKENS", "500"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")

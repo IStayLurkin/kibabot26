@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 
@@ -27,6 +28,10 @@ def write_export_file(rows, export_file: str = "expenses_export.json") -> str:
     return export_file
 
 
+async def write_export_file_async(rows, export_file: str = "expenses_export.json") -> str:
+    return await asyncio.to_thread(write_export_file, rows, export_file)
+
+
 def load_import_file(import_file: str = "expenses_import.json"):
     if not os.path.exists(import_file):
         return False, "No expenses_import.json file found.", None
@@ -38,6 +43,10 @@ def load_import_file(import_file: str = "expenses_import.json"):
         return False, "Invalid format in expenses_import.json. Expected a list of expenses.", None
 
     return True, None, imported_expenses
+
+
+async def load_import_file_async(import_file: str = "expenses_import.json"):
+    return await asyncio.to_thread(load_import_file, import_file)
 
 
 def normalize_imported_expenses(imported_expenses):

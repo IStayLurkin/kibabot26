@@ -1,18 +1,20 @@
 import time
+
 import discord
 from discord.ext import commands
-from database.chat_memory import (
-    get_or_create_session,
-    add_chat_message,
-)
-from services.llm_service import LLMService
-from services.memory_service import store_memory_if_found
-from services.summary_service import maybe_update_summary
-from services.chat_service import generate_dynamic_reply
+
 from core.constants import (
     BOT_ALLOWED_CHAT_CHANNELS,
     CHAT_COOLDOWN_SECONDS,
 )
+from database.chat_memory import (
+    add_chat_message,
+    get_or_create_session,
+)
+from services.chat_service import ChatReply, generate_dynamic_reply
+from services.llm_service import LLMService
+from services.memory_service import store_memory_if_found
+from services.summary_service import maybe_update_summary
 
 
 class ChatCommands(commands.Cog):
@@ -44,8 +46,61 @@ class ChatCommands(commands.Cog):
 
         return message.channel.name.lower() in self.allowed_chat_channels
 
-    async def send_chat_message(self, destination, content: str):
-        await destination.send(content)
+    def _build_chat_services(self) -> dict:
+        return {
+            "image_service": getattr(self.bot, "image_service", None),
+            "voice_service": getattr(self.bot, "voice_service", None),
+            "video_service": getattr(self.bot, "video_service", None),
+            "codegen_service": getattr(self.bot, "codegen_service", None),
+            "osint_service": getattr(self.bot, "osint_service", None),
+        }
+
+    async def send_chat_message(self, destination, reply):
+        if isinstance(reply, str):
+            await destination.send(reply)
+            return
+
+        if not isinstance(reply, ChatReply):
+            await destination.send(str(reply))
+            return
+
+        files = [discord.File(path) for path in reply.file_paths if path]
+
+        if files:
+            await destination.send(reply.content, files=files)
+            return
+
+        await destination.send(reply.content)
+
+    async def handle_chat_turn(self, destination, author, channel, content: str):
+        user_id = str(author.id)
+        channel_id = str(channel.id)
+        session_id = await get_or_create_session(user_id, channel_id)
+
+        await add_chat_message(session_id, "user", content)
+
+        stored_memory = await store_memory_if_found(self.llm, user_id, content)
+        if stored_memory:
+            key, value = stored_memory
+            reply_text = f"Got it. I'll remember that {key} is `{value}`."
+            await add_chat_message(session_id, "bot", reply_text)
+            await self.send_chat_message(destination, reply_text)
+            await maybe_update_summary(self.llm, user_id, channel_id, session_id)
+            return
+
+        reply = await generate_dynamic_reply(
+            self.llm,
+            display_name=author.display_name,
+            user_id=user_id,
+            channel_id=channel_id,
+            session_id=session_id,
+            user_text=content,
+            services=self._build_chat_services(),
+        )
+
+        await add_chat_message(session_id, "bot", reply.content)
+        await self.send_chat_message(destination, reply)
+        await maybe_update_summary(self.llm, user_id, channel_id, session_id)
 
     @commands.command(aliases=["latency"])
     async def ping(self, ctx):
@@ -64,45 +119,19 @@ class ChatCommands(commands.Cog):
             color=discord.Color.blurple()
         )
         embed.add_field(name="Prefix", value="`!`", inline=True)
-        embed.add_field(name="Mode", value="Prefix commands + freeform chat", inline=True)
+        embed.add_field(name="Mode", value="Prefix commands + agentic chat", inline=True)
         embed.add_field(name="Provider", value=f"`{self.llm.provider}`", inline=True)
         embed.add_field(name="Model", value=f"`{self.llm._get_active_model_name()}`", inline=True)
         embed.add_field(
             name="Features",
-            value="Expense tracking, embeds, pagination, chat commands, DMs, freeform replies, memory, summaries, hot-swappable LLMs, live date/time",
+            value="Expense tracking, memory, summaries, intent-aware chat, lightweight planning, tool routing, and media/code helpers",
             inline=False
         )
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["ask", "talk"])
     async def chat(self, ctx, *, message: str):
-        user_id = str(ctx.author.id)
-        channel_id = str(ctx.channel.id)
-        session_id = await get_or_create_session(user_id, channel_id)
-
-        await add_chat_message(session_id, "user", message)
-
-        stored_memory = await store_memory_if_found(self.llm, user_id, message)
-        if stored_memory:
-            key, value = stored_memory
-            reply = f"Got it. I'll remember that {key} is `{value}`."
-            await add_chat_message(session_id, "bot", reply)
-            await self.send_chat_message(ctx, reply)
-            await maybe_update_summary(self.llm, user_id, channel_id, session_id)
-            return
-
-        reply = await generate_dynamic_reply(
-            self.llm,
-            display_name=ctx.author.display_name,
-            user_id=user_id,
-            channel_id=channel_id,
-            session_id=session_id,
-            user_text=message,
-        )
-
-        await add_chat_message(session_id, "bot", reply)
-        await self.send_chat_message(ctx, reply)
-        await maybe_update_summary(self.llm, user_id, channel_id, session_id)
+        await self.handle_chat_turn(ctx, ctx.author, ctx.channel, message)
 
     @commands.command(aliases=["chathelp"])
     async def helpchat(self, ctx):
@@ -118,12 +147,11 @@ class ChatCommands(commands.Cog):
             name="Examples",
             value=(
                 "`!chat hello`\n"
-                "`!chat help`\n"
-                "`!chat how do i add an expense`\n"
-                "`!chat show my recent expenses`\n"
-                "`!chat my name is Brandon`\n"
+                "`!chat help me plan a monthly budget`\n"
+                "`!chat my image prompt is a neon fox in the rain`\n"
+                "`!chat debug this python error`\n"
+                "`!chat whois openai.com`\n"
                 "`!chat what do you remember`\n"
-                "`!chat what were we talking about earlier`\n"
                 "`!chat what day is today`"
             ),
             inline=False
@@ -178,32 +206,20 @@ class ChatCommands(commands.Cog):
             for mention in mention_strings:
                 content = content.replace(mention, "").strip()
 
-        user_id = str(message.author.id)
-        channel_id = str(message.channel.id)
-        session_id = await get_or_create_session(user_id, channel_id)
-
-        if content:
-            await add_chat_message(session_id, "user", content)
-
-            stored_memory = await store_memory_if_found(self.llm, user_id, content)
-            if stored_memory:
-                key, value = stored_memory
-                reply = f"Got it. I'll remember that {key} is `{value}`."
-                await add_chat_message(session_id, "bot", reply)
-                await self.send_chat_message(message.channel, reply)
-                await maybe_update_summary(self.llm, user_id, channel_id, session_id)
-                return
-
         if not content:
+            user_id = str(message.author.id)
+            channel_id = str(message.channel.id)
+            session_id = await get_or_create_session(user_id, channel_id)
+
             if is_dm:
                 reply = (
                     f"Hey {message.author.display_name}, you can just talk to me here. "
-                    "Try asking how to add an expense or use `!help`."
+                    "Tell me what you want to get done and I’ll help."
                 )
             else:
                 reply = (
-                    f"Hey {message.author.display_name}, try `!help`, `!helpchat`, "
-                    "or `!chat <message>`."
+                    f"Hey {message.author.display_name}, tell me what you're trying to do. "
+                    "I can answer, plan, troubleshoot, or use tools when it helps."
                 )
 
             await add_chat_message(session_id, "bot", reply)
@@ -211,18 +227,7 @@ class ChatCommands(commands.Cog):
             await maybe_update_summary(self.llm, user_id, channel_id, session_id)
             return
 
-        reply = await generate_dynamic_reply(
-            self.llm,
-            display_name=message.author.display_name,
-            user_id=user_id,
-            channel_id=channel_id,
-            session_id=session_id,
-            user_text=content,
-        )
-
-        await add_chat_message(session_id, "bot", reply)
-        await self.send_chat_message(message.channel, reply)
-        await maybe_update_summary(self.llm, user_id, channel_id, session_id)
+        await self.handle_chat_turn(message.channel, message.author, message.channel, content)
 
 
 async def setup(bot):

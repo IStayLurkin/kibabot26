@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import uuid
 import wave
-from math import sin, pi
+from math import pi, sin
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceService:
-    def __init__(self, llm_service: Any | None = None) -> None:
+    def __init__(self, llm_service: Any | None = None, performance_tracker=None) -> None:
         self.llm_service = llm_service
+        self.performance_tracker = performance_tracker
         self.output_dir = Path(MEDIA_OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -31,32 +33,40 @@ class VoiceService:
         4. {"audio_bytes": b"..."}
         """
 
-        if self.llm_service is not None:
-            for method_name in ("text_to_speech", "generate_speech", "tts"):
-                method = getattr(self.llm_service, method_name, None)
+        started_at = time.perf_counter()
+        try:
+            if self.llm_service is not None:
+                for method_name in ("text_to_speech", "generate_speech", "tts"):
+                    method = getattr(self.llm_service, method_name, None)
 
-                if method is None:
-                    continue
+                    if method is None:
+                        continue
 
-                try:
-                    result = await method(text=text)
-                    return self._normalize_result(result)
-
-                except TypeError:
                     try:
-                        result = await method(text)
+                        result = await method(text=text)
                         return self._normalize_result(result)
+
+                    except TypeError:
+                        try:
+                            result = await method(text)
+                            return self._normalize_result(result)
+                        except Exception:
+                            logger.exception("TTS failed via %s", method_name)
+
                     except Exception:
                         logger.exception("TTS failed via %s", method_name)
 
-                except Exception:
-                    logger.exception("TTS failed via %s", method_name)
+            logger.warning(
+                "No TTS provider configured. Returning placeholder audio tone."
+            )
 
-        logger.warning(
-            "No TTS provider configured. Returning placeholder audio tone."
-        )
-
-        return self._build_placeholder_wav()
+            return self._build_placeholder_wav()
+        finally:
+            if self.performance_tracker is not None:
+                self.performance_tracker.record_service_call(
+                    "voice.text_to_speech",
+                    (time.perf_counter() - started_at) * 1000,
+                )
 
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):

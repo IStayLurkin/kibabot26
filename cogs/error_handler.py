@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+
 from core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,6 +20,10 @@ class ErrorHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
+        tracker = getattr(self.bot, "performance_tracker", None)
+        if tracker is not None:
+            tracker.finish_command(id(ctx.message))
+
         if hasattr(ctx.command, "on_error"):
             return
 

@@ -1,46 +1,47 @@
 import discord
 from discord.ext import commands
-from database.database import (
-    add_expense,
-    get_all_expenses,
-    delete_expense,
-    get_total_expenses,
-    get_category_totals,
-    get_recent_expenses,
-    search_expenses_by_category,
-    clear_expenses,
-)
-from services.expense_validation_service import (
-    normalize_category,
-    validate_amount,
-    validate_recent_count,
-    validate_clear_confirmation,
-)
-from services.expense_file_service import (
-    write_export_file,
-    load_import_file,
-    normalize_imported_expenses,
-)
-from services.expense_embed_service import (
-    build_start_embed,
-    build_dashboard_embed,
-    build_add_success_embed,
-    build_total_embed,
-    build_no_categories_embed,
-    build_categories_embed,
-    build_help_embed,
-    build_delete_result_embed,
-    build_recent_embed,
-    build_clear_success_embed,
-    build_import_complete_embed,
-    build_stats_embed,
-    build_search_embed,
-)
-from services.expense_view_service import ExpenseListView
+
 from core.constants import (
     EXPENSE_PER_PAGE,
     EXPENSE_RECENT_DEFAULT_COUNT,
 )
+from database.database import (
+    add_expense,
+    clear_expenses,
+    delete_expense,
+    get_all_expenses,
+    get_category_totals,
+    get_recent_expenses,
+    get_total_expenses,
+    search_expenses_by_category,
+)
+from services.expense_embed_service import (
+    build_add_success_embed,
+    build_categories_embed,
+    build_clear_success_embed,
+    build_dashboard_embed,
+    build_delete_result_embed,
+    build_help_embed,
+    build_import_complete_embed,
+    build_no_categories_embed,
+    build_recent_embed,
+    build_search_embed,
+    build_start_embed,
+    build_stats_embed,
+    build_total_embed,
+)
+from services.expense_file_service import (
+    load_import_file_async,
+    normalize_imported_expenses,
+    write_export_file_async,
+)
+from services.expense_validation_service import (
+    normalize_category,
+    validate_amount,
+    validate_clear_confirmation,
+    validate_recent_count,
+)
+from services.expense_view_service import ExpenseListView
 
 
 class ExpenseCommands(commands.Cog):
@@ -157,12 +158,12 @@ class ExpenseCommands(commands.Cog):
             await ctx.send("No expenses to export.")
             return
 
-        export_file = write_export_file(rows)
+        export_file = await write_export_file_async(rows)
         await ctx.send(file=discord.File(export_file))
 
     @commands.command(aliases=["imp"])
     async def import_expenses(self, ctx):
-        ok, error_message, imported_expenses = load_import_file()
+        ok, error_message, imported_expenses = await load_import_file_async()
 
         if not ok:
             await ctx.send(error_message)

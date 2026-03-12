@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -13,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class ImageService:
-    def __init__(self, llm_service: Any | None = None) -> None:
+    def __init__(self, llm_service: Any | None = None, performance_tracker=None) -> None:
         self.llm_service = llm_service
+        self.performance_tracker = performance_tracker
         self.output_dir = Path(MEDIA_OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -30,33 +32,41 @@ class ImageService:
         4. direct file path string
         """
 
-        if self.llm_service is None:
-            raise RuntimeError(
-                "Image service is not configured with an image-capable provider."
-            )
+        started_at = time.perf_counter()
+        try:
+            if self.llm_service is None:
+                raise RuntimeError(
+                    "Image service is not configured with an image-capable provider."
+                )
 
-        for method_name in ("generate_image", "image", "create_image"):
-            method = getattr(self.llm_service, method_name, None)
-            if method is None:
-                continue
+            for method_name in ("generate_image", "image", "create_image"):
+                method = getattr(self.llm_service, method_name, None)
+                if method is None:
+                    continue
 
-            try:
-                result = await method(prompt=prompt)
-                return self._normalize_result(result)
-
-            except TypeError:
                 try:
-                    result = await method(prompt)
+                    result = await method(prompt=prompt)
                     return self._normalize_result(result)
+
+                except TypeError:
+                    try:
+                        result = await method(prompt)
+                        return self._normalize_result(result)
+                    except Exception:
+                        logger.exception("Image generation failed via %s", method_name)
+
                 except Exception:
                     logger.exception("Image generation failed via %s", method_name)
 
-            except Exception:
-                logger.exception("Image generation failed via %s", method_name)
-
-        raise RuntimeError(
-            "No compatible image generation method found on llm_service."
-        )
+            raise RuntimeError(
+                "No compatible image generation method found on llm_service."
+            )
+        finally:
+            if self.performance_tracker is not None:
+                self.performance_tracker.record_service_call(
+                    "image.generate_image",
+                    (time.perf_counter() - started_at) * 1000,
+                )
 
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):

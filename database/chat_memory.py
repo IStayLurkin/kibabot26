@@ -52,6 +52,21 @@ async def init_chat_memory_db():
             )
         """)
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS chat_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                goal TEXT NOT NULL DEFAULT '',
+                last_intent TEXT NOT NULL DEFAULT '',
+                response_mode TEXT NOT NULL DEFAULT '',
+                last_tool TEXT NOT NULL DEFAULT '',
+                pending_question TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, channel_id)
+            )
+        """)
+
         await db.commit()
 
 
@@ -154,3 +169,73 @@ async def get_user_memory(user_id: str):
             ORDER BY memory_key
         """, (user_id,))
         return await cursor.fetchall()
+
+
+async def get_conversation_state(user_id: str, channel_id: str) -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT goal, last_intent, response_mode, last_tool, pending_question
+            FROM chat_state
+            WHERE user_id = ? AND channel_id = ?
+        """, (user_id, channel_id))
+        row = await cursor.fetchone()
+
+        if not row:
+            return {
+                "goal": "",
+                "last_intent": "",
+                "response_mode": "",
+                "last_tool": "",
+                "pending_question": "",
+            }
+
+        return {
+            "goal": row[0] or "",
+            "last_intent": row[1] or "",
+            "response_mode": row[2] or "",
+            "last_tool": row[3] or "",
+            "pending_question": row[4] or "",
+        }
+
+
+async def set_conversation_state(
+    user_id: str,
+    channel_id: str,
+    *,
+    goal: str = "",
+    last_intent: str = "",
+    response_mode: str = "",
+    last_tool: str = "",
+    pending_question: str = "",
+):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO chat_state (
+                user_id,
+                channel_id,
+                goal,
+                last_intent,
+                response_mode,
+                last_tool,
+                pending_question,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, channel_id)
+            DO UPDATE SET
+                goal = excluded.goal,
+                last_intent = excluded.last_intent,
+                response_mode = excluded.response_mode,
+                last_tool = excluded.last_tool,
+                pending_question = excluded.pending_question,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            user_id,
+            channel_id,
+            goal,
+            last_intent,
+            response_mode,
+            last_tool,
+            pending_question,
+        ))
+        await db.commit()

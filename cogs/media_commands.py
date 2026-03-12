@@ -16,9 +16,22 @@ class MediaCommands(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         llm_service = getattr(bot, "llm_service", None)
-        self.image_service = ImageService(llm_service=llm_service)
-        self.voice_service = VoiceService(llm_service=llm_service)
-        self.video_service = VideoService(llm_service=llm_service)
+        performance_tracker = getattr(bot, "performance_tracker", None)
+        self.image_service = getattr(
+            bot,
+            "image_service",
+            ImageService(llm_service=llm_service, performance_tracker=performance_tracker),
+        )
+        self.voice_service = getattr(
+            bot,
+            "voice_service",
+            VoiceService(llm_service=llm_service, performance_tracker=performance_tracker),
+        )
+        self.video_service = getattr(
+            bot,
+            "video_service",
+            VideoService(llm_service=llm_service, performance_tracker=performance_tracker),
+        )
 
     @commands.command(name="image", aliases=["img"])
     async def image_command(self, ctx: commands.Context, *, prompt: str) -> None:

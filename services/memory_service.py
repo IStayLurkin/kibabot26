@@ -1,7 +1,42 @@
 from database.chat_memory import get_user_memory, set_user_memory
 from core.logging_config import get_logger
+from services.tool_router import (
+    INTENT_CASUAL_CHAT,
+    INTENT_MULTI_STEP_HELP,
+    INTENT_PLANNING,
+    INTENT_TOOL_USE_REQUEST,
+    INTENT_TROUBLESHOOTING,
+    ToolRouter,
+)
 
 logger = get_logger(__name__)
+
+
+NON_MEMORY_PREFIXES = (
+    "help me ",
+    "can you help me",
+    "how do i ",
+    "plan ",
+    "debug ",
+    "fix ",
+    "whois ",
+    "dns ",
+    "generate ",
+    "make ",
+    "create ",
+    "show me ",
+)
+
+TASK_CONTEXT_MARKERS = (
+    "income",
+    "budget",
+    "groceries",
+    "rent",
+    "fun money",
+    "extra",
+    "allocate",
+    "monthly",
+)
 
 
 def extract_memory_fact(text: str):
@@ -28,9 +63,61 @@ def format_memory(memory_rows):
     return {key: value for key, value in memory_rows}
 
 
+def should_attempt_memory_storage(content: str) -> bool:
+    cleaned = content.strip()
+    lowered = cleaned.lower()
+
+    if not cleaned or len(cleaned.split()) < 2:
+        return False
+
+    explicit_memory = extract_memory_fact(cleaned)
+    if explicit_memory:
+        return True
+
+    if any(lowered.startswith(prefix) for prefix in NON_MEMORY_PREFIXES):
+        return False
+
+    router = ToolRouter()
+    route_decision = router.route(cleaned)
+
+    if route_decision.intent in {
+        INTENT_MULTI_STEP_HELP,
+        INTENT_PLANNING,
+        INTENT_TROUBLESHOOTING,
+        INTENT_TOOL_USE_REQUEST,
+    }:
+        return False
+
+    if route_decision.intent == INTENT_CASUAL_CHAT:
+        return False
+
+    blocked_phrases = (
+        "budget",
+        "plan",
+        "steps",
+        "error",
+        "bug",
+        "traceback",
+        "how do i",
+        "what should i do",
+        "can you help",
+    )
+    if any(phrase in lowered for phrase in blocked_phrases):
+        return False
+
+    return True
+
+
 async def maybe_extract_ai_memory(llm, user_id: str, content: str):
+    if not should_attempt_memory_storage(content):
+        return None
+
     memory_rows = await get_user_memory(user_id)
     existing_memory = format_memory(memory_rows)
+    lowered = content.strip().lower()
+
+    if any(marker in lowered for marker in TASK_CONTEXT_MARKERS):
+        return None
 
     try:
         extracted = await llm.extract_memory(
@@ -52,6 +139,22 @@ async def maybe_extract_ai_memory(llm, user_id: str, content: str):
         return None
 
     if not memory_key or not memory_value:
+        return None
+
+    blocked_memory_keys = {
+        "income",
+        "salary",
+        "budget",
+        "budget_categories",
+        "groceries",
+        "rent",
+        "fun_money",
+        "extra",
+    }
+    if memory_key.lower() in blocked_memory_keys:
+        return None
+
+    if len(memory_value.split()) > 12:
         return None
 
     await set_user_memory(user_id, memory_key, memory_value)

@@ -27,7 +27,11 @@ class AgentCommands(commands.Cog):
         self.bot = bot
         llm_service = getattr(bot, "llm_service", None)
         self.agent_service = AgentService(llm_service=llm_service)
-        self.osint_service = OSINTService()
+        self.osint_service = getattr(
+            bot,
+            "osint_service",
+            OSINTService(performance_tracker=getattr(bot, "performance_tracker", None)),
+        )
 
     @commands.command(name="agent")
     @is_owner_or_admin()

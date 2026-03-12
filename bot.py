@@ -1,15 +1,24 @@
 import asyncio
+import time
+
 import discord
 from discord.ext import commands
-from database.database import init_db
+
 from core.config import (
     DISCORD_BOT_TOKEN,
     BOT_PREFIX,
     BOT_TIMEZONE,
 )
 from core.logging_config import setup_logging, get_logger
-from tasks.task_manager import TaskManager
+from database.database import init_db
+from services.codegen_service import CodegenService
+from services.image_service import ImageService
 from services.llm_service import LLMService
+from services.osint_service import OSINTService
+from services.performance_service import PerformanceTracker
+from services.video_service import VideoService
+from services.voice_service import VoiceService
+from tasks.task_manager import TaskManager
 
 setup_logging()
 logger = get_logger(__name__)
@@ -22,36 +31,63 @@ class ExpenseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.startup_banner_printed = False
+        self.performance_tracker = PerformanceTracker()
         self.task_manager = TaskManager(self)
         self.llm_service = None
+        self.image_service = None
+        self.voice_service = None
+        self.video_service = None
+        self.codegen_service = None
+        self.osint_service = None
 
     async def setup_hook(self):
-        logger.info("setup_hook: initializing database...")
-        await init_db()
+        async with self.performance_tracker.track_service_call("startup.init_db"):
+            logger.info("setup_hook: initializing database...")
+            await init_db()
 
-        logger.info("setup_hook: initializing llm service...")
-        self.llm_service = LLMService()
+        logger.info("setup_hook: initializing llm and shared services...")
+        service_started_at = time.perf_counter()
+        self.llm_service = LLMService(performance_tracker=self.performance_tracker)
+        self.image_service = ImageService(
+            llm_service=self.llm_service,
+            performance_tracker=self.performance_tracker,
+        )
+        self.voice_service = VoiceService(
+            llm_service=self.llm_service,
+            performance_tracker=self.performance_tracker,
+        )
+        self.video_service = VideoService(
+            llm_service=self.llm_service,
+            performance_tracker=self.performance_tracker,
+        )
+        self.codegen_service = CodegenService(
+            llm_service=self.llm_service,
+            performance_tracker=self.performance_tracker,
+        )
+        self.osint_service = OSINTService(performance_tracker=self.performance_tracker)
+        self.performance_tracker.record_service_call(
+            "startup.init_services",
+            (time.perf_counter() - service_started_at) * 1000,
+        )
 
-        logger.info("setup_hook: loading expense commands cog...")
-        await self.load_extension("cogs.expense_commands")
+        extensions = [
+            "cogs.expense_commands",
+            "cogs.budget_commands",
+            "cogs.error_handler",
+            "cogs.chat_commands",
+            "cogs.dev_commands",
+            "cogs.media_commands",
+            "cogs.agent_commands",
+        ]
 
-        logger.info("setup_hook: loading budget commands cog...")
-        await self.load_extension("cogs.budget_commands")
-
-        logger.info("setup_hook: loading error handler cog...")
-        await self.load_extension("cogs.error_handler")
-
-        logger.info("setup_hook: loading chat commands cog...")
-        await self.load_extension("cogs.chat_commands")
-
-        logger.info("setup_hook: loading dev commands cog...")
-        await self.load_extension("cogs.dev_commands")
-
-        logger.info("setup_hook: loading media commands cog...")
-        await self.load_extension("cogs.media_commands")
-
-        logger.info("setup_hook: loading agent commands cog...")
-        await self.load_extension("cogs.agent_commands")
+        for extension in extensions:
+            logger.info("setup_hook: loading extension %s...", extension)
+            started_at = time.perf_counter()
+            await self.load_extension(extension)
+            self.performance_tracker.record_service_call(
+                f"startup.load_extension.{extension}",
+                (time.perf_counter() - started_at) * 1000,
+            )
 
         logger.info("setup_hook: starting background tasks...")
         self.task_manager.start_all()
@@ -116,6 +152,31 @@ async def on_resumed():
 @bot.event
 async def on_disconnect():
     logger.warning("Bot disconnected from Discord gateway.")
+
+
+@bot.before_invoke
+async def before_any_command(ctx: commands.Context):
+    if ctx.command is None:
+        return
+
+    bot.performance_tracker.start_command(id(ctx.message), ctx.command.qualified_name)
+
+
+@bot.after_invoke
+async def after_any_command(ctx: commands.Context):
+    if ctx.command is None:
+        return
+
+    duration_ms = bot.performance_tracker.finish_command(id(ctx.message))
+    if duration_ms is None:
+        return
+
+    logger.info(
+        "[command] name=%s duration_ms=%.2f websocket_latency_ms=%.2f",
+        ctx.command.qualified_name,
+        duration_ms,
+        bot.latency * 1000,
+    )
 
 
 async def main():
