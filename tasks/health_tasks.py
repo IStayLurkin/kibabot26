@@ -27,6 +27,39 @@ class HealthTasks:
         if self.loop_monitor_task is not None and not self.loop_monitor_task.done():
             self.loop_monitor_task.cancel()
 
+    def _format_brief_metric(self, label: str, current: float, average: float, maximum: float) -> str:
+        return f"{label}={current:.0f}ms avg={average:.0f} max={maximum:.0f}"
+
+    def _format_top_commands(self, commands_snapshot: list[dict]) -> str:
+        if not commands_snapshot:
+            return ""
+
+        top_commands = ", ".join(
+            f"{item['name']} {item['avg_ms']:.0f}ms"
+            for item in commands_snapshot[:2]
+        )
+        return f"commands=[{top_commands}]"
+
+    def _format_top_services(self, services_snapshot: list[dict]) -> str:
+        if not services_snapshot:
+            return ""
+
+        top_services = ", ".join(
+            f"{item['name']} {item['avg_ms']:.0f}ms"
+            for item in services_snapshot[:2]
+        )
+        return f"services=[{top_services}]"
+
+    def _format_slow_ops(self, slow_operations: list[dict]) -> str:
+        if not slow_operations:
+            return ""
+
+        slow_summary = ", ".join(
+            f"{item['category']}:{item['name']} {item['duration_ms']:.0f}ms"
+            for item in slow_operations[:2]
+        )
+        return f"slow=[{slow_summary}]"
+
     @tasks.loop(minutes=1)
     async def bot_health_check(self):
         tracker = getattr(self.bot, "performance_tracker", None)
@@ -44,37 +77,43 @@ class HealthTasks:
                 "loop_lag_max_ms": 0.0,
                 "commands": [],
                 "services": [],
+                "runtime_services": [],
                 "slow_operations": [],
             }
 
-        command_summary = ", ".join(
-            f"{item['name']} avg={item['avg_ms']} max={item['max_ms']}"
-            for item in snapshot["commands"][:3]
-        ) or "none"
+        parts = [
+            f"guilds={len(self.bot.guilds)}",
+            self._format_brief_metric(
+                "ws",
+                snapshot["websocket_current_ms"],
+                snapshot["websocket_avg_ms"],
+                snapshot["websocket_max_ms"],
+            ),
+        ]
 
-        service_summary = ", ".join(
-            f"{item['name']} avg={item['avg_ms']} max={item['max_ms']}"
-            for item in snapshot["services"][:4]
-        ) or "none"
+        if snapshot["loop_lag_max_ms"] >= 10:
+            parts.append(
+                self._format_brief_metric(
+                    "loop",
+                    snapshot["loop_lag_avg_ms"],
+                    snapshot["loop_lag_avg_ms"],
+                    snapshot["loop_lag_max_ms"],
+                )
+            )
 
-        slow_summary = ", ".join(
-            f"{item['category']}:{item['name']}={item['duration_ms']}ms"
-            for item in snapshot["slow_operations"]
-        ) or "none"
+        command_summary = self._format_top_commands(snapshot["commands"])
+        if command_summary:
+            parts.append(command_summary)
 
-        logger.info(
-            "[health] guilds=%s websocket_latency_ms=%.2f websocket_avg_ms=%.2f websocket_max_ms=%.2f "
-            "loop_lag_avg_ms=%.2f loop_lag_max_ms=%.2f top_commands=%s top_services=%s slow_ops=%s",
-            len(self.bot.guilds),
-            snapshot["websocket_current_ms"],
-            snapshot["websocket_avg_ms"],
-            snapshot["websocket_max_ms"],
-            snapshot["loop_lag_avg_ms"],
-            snapshot["loop_lag_max_ms"],
-            command_summary,
-            service_summary,
-            slow_summary,
-        )
+        service_summary = self._format_top_services(snapshot["runtime_services"])
+        if service_summary:
+            parts.append(service_summary)
+
+        slow_summary = self._format_slow_ops(snapshot["slow_operations"])
+        if slow_summary:
+            parts.append(slow_summary)
+
+        logger.info("[health] %s", " | ".join(parts))
 
     @bot_health_check.before_loop
     async def before_bot_health_check(self):

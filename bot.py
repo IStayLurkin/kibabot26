@@ -42,10 +42,8 @@ class ExpenseBot(commands.Bot):
 
     async def setup_hook(self):
         async with self.performance_tracker.track_service_call("startup.init_db"):
-            logger.info("setup_hook: initializing database...")
             await init_db()
 
-        logger.info("setup_hook: initializing llm and shared services...")
         service_started_at = time.perf_counter()
         self.llm_service = LLMService(performance_tracker=self.performance_tracker)
         self.image_service = ImageService(
@@ -81,7 +79,7 @@ class ExpenseBot(commands.Bot):
         ]
 
         for extension in extensions:
-            logger.info("setup_hook: loading extension %s...", extension)
+            logger.debug("Loading extension %s", extension)
             started_at = time.perf_counter()
             await self.load_extension(extension)
             self.performance_tracker.record_service_call(
@@ -89,7 +87,6 @@ class ExpenseBot(commands.Bot):
                 (time.perf_counter() - started_at) * 1000,
             )
 
-        logger.info("setup_hook: starting background tasks...")
         self.task_manager.start_all()
 
     async def close(self):
@@ -112,22 +109,23 @@ class ExpenseBot(commands.Bot):
                 model = get_model_name()
 
         loaded_cogs = sorted(self.extensions.keys())
-
-        logger.info("=" * 52)
-        logger.info("Kiba Bot Startup")
-        logger.info("=" * 52)
-        logger.info("User: %s", self.user)
-        logger.info("Prefix: %s", BOT_PREFIX)
-        logger.info("Provider: %s", provider)
-        logger.info("Model: %s", model)
-        logger.info("Timezone: %s", BOT_TIMEZONE)
-        logger.info("Database: connected")
-        logger.info("Cogs loaded: %s", len(loaded_cogs))
-
-        for cog in loaded_cogs:
-            logger.info("  - %s", cog)
-
-        logger.info("=" * 52)
+        startup_snapshot = self.performance_tracker.get_health_snapshot()
+        logger.info(
+            "[startup] user=%s prefix=%s provider=%s model=%s timezone=%s cogs=%s",
+            self.user,
+            BOT_PREFIX,
+            provider,
+            model,
+            BOT_TIMEZONE,
+            len(loaded_cogs),
+        )
+        logger.info(
+            "[startup] ws=%sms services=%s commands=%s",
+            f"{startup_snapshot['websocket_current_ms']:.0f}",
+            len(startup_snapshot["services"]),
+            len(startup_snapshot["commands"]),
+        )
+        logger.debug("Loaded cogs: %s", ", ".join(loaded_cogs))
 
 
 bot = ExpenseBot(command_prefix=BOT_PREFIX, intents=intents, help_command=None)
@@ -135,23 +133,21 @@ bot = ExpenseBot(command_prefix=BOT_PREFIX, intents=intents, help_command=None)
 
 @bot.event
 async def on_ready():
-    logger.info("Bot connected as %s", bot.user)
-
     if not bot.startup_banner_printed:
         bot.print_startup_banner()
         bot.startup_banner_printed = True
     else:
-        logger.info("on_ready fired again after reconnect/resume.")
+        logger.info("[gateway] reconnected user=%s", bot.user)
 
 
 @bot.event
 async def on_resumed():
-    logger.info("Discord session resumed successfully.")
+    logger.info("[gateway] session resumed")
 
 
 @bot.event
 async def on_disconnect():
-    logger.warning("Bot disconnected from Discord gateway.")
+    logger.warning("[gateway] disconnected")
 
 
 @bot.before_invoke
@@ -171,19 +167,27 @@ async def after_any_command(ctx: commands.Context):
     if duration_ms is None:
         return
 
-    logger.info(
-        "[command] name=%s duration_ms=%.2f websocket_latency_ms=%.2f",
-        ctx.command.qualified_name,
-        duration_ms,
-        bot.latency * 1000,
-    )
+    if duration_ms >= 1000:
+        logger.info(
+            "[command] name=%s duration_ms=%.2f websocket_latency_ms=%.2f",
+            ctx.command.qualified_name,
+            duration_ms,
+            bot.latency * 1000,
+        )
+    else:
+        logger.debug(
+            "[command] name=%s duration_ms=%.2f websocket_latency_ms=%.2f",
+            ctx.command.qualified_name,
+            duration_ms,
+            bot.latency * 1000,
+        )
 
 
 async def main():
     if not DISCORD_BOT_TOKEN:
         raise ValueError("Error: DISCORD_BOT_TOKEN not found in environment variables.")
 
-    logger.info("Starting bot...")
+    logger.info("[startup] booting")
 
     async with bot:
         await bot.start(DISCORD_BOT_TOKEN)

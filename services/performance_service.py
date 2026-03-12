@@ -10,6 +10,14 @@ from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+COMMAND_INFO_THRESHOLD_MS = 1000
+COMMAND_WARNING_THRESHOLD_MS = 3000
+COMMAND_ERROR_THRESHOLD_MS = 8000
+
+SERVICE_INFO_THRESHOLD_MS = 3000
+SERVICE_WARNING_THRESHOLD_MS = 5000
+SERVICE_ERROR_THRESHOLD_MS = 8000
+
 
 @dataclass(slots=True)
 class OperationRecord:
@@ -46,12 +54,12 @@ class PerformanceTracker:
         command_name, started_at = started
         duration_ms = (time.perf_counter() - started_at) * 1000
         self.command_durations_ms[command_name].append(duration_ms)
-        self._record_slow_operation("command", command_name, duration_ms, threshold_ms=750)
+        self._record_slow_operation("command", command_name, duration_ms)
         return duration_ms
 
     def record_service_call(self, name: str, duration_ms: float) -> None:
         self.service_durations_ms[name].append(float(duration_ms))
-        self._record_slow_operation("service", name, duration_ms, threshold_ms=1200)
+        self._record_slow_operation("service", name, duration_ms)
 
     @asynccontextmanager
     async def track_service_call(self, name: str):
@@ -67,10 +75,12 @@ class PerformanceTracker:
         category: str,
         name: str,
         duration_ms: float,
-        *,
-        threshold_ms: float,
     ) -> None:
-        if duration_ms < threshold_ms:
+        if name.startswith("startup."):
+            return
+
+        severity = self._get_severity(duration_ms, category)
+        if severity is None:
             return
 
         record = OperationRecord(
@@ -80,12 +90,38 @@ class PerformanceTracker:
             created_at=time.time(),
         )
         self.recent_slow_operations.append(record)
-        logger.warning(
-            "[perf] slow_%s name=%s duration_ms=%.2f",
-            category,
-            name,
-            duration_ms,
-        )
+        message = "[perf] %s_%s name=%s duration_ms=%.2f"
+
+        if severity == "error":
+            logger.error(message, severity, category, name, duration_ms)
+            return
+
+        if severity == "warning":
+            logger.warning(message, severity, category, name, duration_ms)
+            return
+
+        logger.info(message, severity, category, name, duration_ms)
+
+    def _get_severity(self, duration_ms: float, category: str = "service") -> str | None:
+        if category == "command":
+            info_threshold = COMMAND_INFO_THRESHOLD_MS
+            warning_threshold = COMMAND_WARNING_THRESHOLD_MS
+            error_threshold = COMMAND_ERROR_THRESHOLD_MS
+        else:
+            info_threshold = SERVICE_INFO_THRESHOLD_MS
+            warning_threshold = SERVICE_WARNING_THRESHOLD_MS
+            error_threshold = SERVICE_ERROR_THRESHOLD_MS
+
+        if duration_ms >= error_threshold:
+            return "error"
+
+        if duration_ms >= warning_threshold:
+            return "warning"
+
+        if duration_ms >= info_threshold:
+            return "info"
+
+        return None
 
     def _average(self, values: deque[float]) -> float:
         if not values:
@@ -127,6 +163,11 @@ class PerformanceTracker:
             })
         recent_services.sort(key=lambda item: item["avg_ms"], reverse=True)
 
+        runtime_services = [
+            item for item in recent_services
+            if not item["name"].startswith("startup.")
+        ]
+
         slow_ops = [
             {
                 "category": record.category,
@@ -144,6 +185,7 @@ class PerformanceTracker:
             "loop_lag_max_ms": round(loop_lag_max_ms, 2),
             "commands": recent_commands[:5],
             "services": recent_services[:8],
+            "runtime_services": runtime_services[:8],
             "slow_operations": slow_ops,
         }
 

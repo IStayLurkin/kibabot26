@@ -11,6 +11,10 @@ def setup_logging(level: int = logging.INFO):
         format=LOG_FORMAT,
         datefmt=DATE_FORMAT,
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("discord.gateway").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:
