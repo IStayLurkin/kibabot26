@@ -1,6 +1,19 @@
+# --- MUST BE AT THE ABSOLUTE TOP ---
+import os
+# Force all 33GB+ of AI models to stay on your G: drive project folder
+# --- MUST BE AT THE ABSOLUTE TOP ---
+import os
+# Redirection for HuggingFace (FLUX/YuE)
+os.environ['HF_HOME'] = r'G:\code\python\learn_python\bot\discord_bot_things\models\huggingface'
+os.environ['TORCH_HOME'] = r'G:\code\python\learn_python\bot\discord_bot_things\models\torch'
+
+# Redirection for Ollama (Qwen3) - Ensures the bot knows where the engine sits
+os.environ['OLLAMA_MODELS'] = r'G:\ollamamodels'
+# ----------------------------------
+# ----------------------------------
+
 import asyncio
 import time
-
 import discord
 from discord.ext import commands
 
@@ -42,6 +55,11 @@ class ExpenseBot(commands.Bot):
         self.performance_tracker = PerformanceTracker()
         self.task_manager = TaskManager(self)
         self.song_session_service = SongSessionService()
+        
+        # Hardware-Aware State Flags
+        # This prevents the VRAM Guard from clearing memory during active generation
+        self.is_generating = False 
+        
         self.llm_service = None
         self.image_service = None
         self.voice_service = None
@@ -57,25 +75,23 @@ class ExpenseBot(commands.Bot):
         self.command_help_service = None
         self.start_time = time.perf_counter()
 
-
-# Add this to ExpenseBot class
     async def on_message(self, message):
         # 1. Ignore yourself and other bots
         if message.author.bot:
             return
 
-        # 2. Allow commands to process normally (like !image or !code)
+        # 2. Allow commands to process normally (like !status, !image, !studio)
         ctx = await self.get_context(message)
         if ctx.valid:
             await self.process_commands(message)
             return
 
-        # 3. Handle "Natural Chat" if no command is found
-        # This is where your Dolphin-Llama3 will shine without prefix restrictions
+        # 3. Handle "Natural Chat" via the LangGraph AgentDispatcher
+        # This handles the VRAM-aware logic for Qwen3 vs FLUX.2 vs YuE
         if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
             chat_cog = self.get_cog("ChatCommands")
             if chat_cog:
-                # Direct call to your unfiltered chat logic
+                # Routes to the hardware-aware bridge we built
                 await chat_cog.handle_natural_chat(message)
 
     async def setup_hook(self):
@@ -102,7 +118,6 @@ class ExpenseBot(commands.Bot):
             behavior_rule_service=self.behavior_rule_service,
         )
         self.image_service = ImageService(
-            llm_service=self.llm_service,
             performance_tracker=self.performance_tracker,
         )
         self.voice_service = VoiceService(
@@ -140,16 +155,20 @@ class ExpenseBot(commands.Bot):
             "cogs.agent_commands",
             "cogs.runtime_commands",
             "cogs.code_commands",
+            "tasks.vram_guard", # Essential VRAM monitoring task
         ]
 
         for extension in extensions:
             logger.debug("Loading extension %s", extension)
             started_at = time.perf_counter()
-            await self.load_extension(extension)
-            self.performance_tracker.record_service_call(
-                f"startup.load_extension.{extension}",
-                (time.perf_counter() - started_at) * 1000,
-            )
+            try:
+                await self.load_extension(extension)
+                self.performance_tracker.record_service_call(
+                    f"startup.load_extension.{extension}",
+                    (time.perf_counter() - started_at) * 1000,
+                )
+            except Exception as e:
+                logger.error("Failed to load extension %s: %s", extension, e)
 
         self.task_manager.start_all()
 

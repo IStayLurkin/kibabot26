@@ -1,6 +1,33 @@
-discord.py
-python-dotenv
-aiosqlite
+# Hardware Index
+--extra-index-url https://download.pytorch.org/whl/cu124
+
+# Core GPU Stack
+torch==2.6.0+cu124
+torchvision
+torchaudio
+
+# AI Frameworks & Client
 openai
-watchfiles
-PyNaCl
+diffusers
+transformers
+accelerate
+bitsandbytes
+sentencepiece
+protobuf
+
+# Utilities (The "Missing" pieces)
+python-dotenv
+pytz
+requests
+urllib3
+
+# Agent & Bot Logic
+langgraph
+aiohttp
+scipy
+discord.py
+
+# Media Processing
+opencv-python
+Pillow
+mediapipe

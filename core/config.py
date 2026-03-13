@@ -3,7 +3,14 @@ from dotenv import load_dotenv
 from core.constants import BOT_DEFAULT_PREFIX
 
 load_dotenv()
+os.environ["HF_HOME"] = "G:/huggingface_cache"
+os.environ["TORCH_HOME"] = "G:/torch_cache"
+os.environ["OLLAMA_MODELS"] = "G:/ollamamodels"
+os.environ["PIP_CACHE_DIR"] = "G:/pip_cache"
 
+# Force CUDA context for the 3090 Ti
+if CUDA_PREFERRED:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def _parse_int_list(value: str) -> list[int]:
     values = []
@@ -39,7 +46,7 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "dolphin-llama3")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "dolphin-llama3:latest")
 OLLAMA_CLI_PATH = os.getenv("OLLAMA_CLI_PATH", "").strip()
 OLLAMA_REQUEST_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_REQUEST_TIMEOUT_SECONDS", "180"))
 
@@ -56,13 +63,13 @@ OSINT_ENABLED = os.getenv("OSINT_ENABLED", "true").strip().lower() in {"1", "tru
 
 SAFE_OSINT_ONLY = os.getenv("SAFE_OSINT_ONLY", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "generated_media")
-MODEL_STORAGE_ROOT = os.getenv("MODEL_STORAGE_ROOT", "model_storage")
+MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "G:/code/python/learn_python/bot/discord_bot_things/generated_media")
+MODEL_STORAGE_ROOT = os.getenv("MODEL_STORAGE_ROOT", "G:/huggingface_cache")
 MODEL_PULL_TIMEOUT_SECONDS = int(os.getenv("MODEL_PULL_TIMEOUT_SECONDS", "1800"))
 ENABLED_MODEL_PROVIDERS = _parse_str_list(os.getenv("ENABLED_MODEL_PROVIDERS", "openai,ollama,local,hf,automatic1111,comfyui"))
 DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", LLM_PROVIDER).strip().lower()
 
-CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "code_workspace")
+CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "G:/code/python/learn_python/bot/discord_bot_things/code_workspace")
 CODE_SANDBOX_MODE = os.getenv("CODE_SANDBOX_MODE", "subprocess").strip().lower()
 CODE_EXECUTION_TIMEOUT_SECONDS = int(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "20"))
 CODE_MAX_OUTPUT_CHARS = int(os.getenv("CODE_MAX_OUTPUT_CHARS", "6000"))

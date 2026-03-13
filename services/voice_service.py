@@ -82,7 +82,8 @@ class VoiceService:
                     "voice.text_to_speech",
                     (time.perf_counter() - started_at) * 1000,
                 )
-
+        print(f"[DEBUG] Voice/TTS Request -> Engine: {self.provider} | Local: True")
+        print(f"[DEBUG] Voice/TTS Request -> Engine: {self.provider} | Audioop: Native (3.12)")
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):
             if os.path.exists(result):

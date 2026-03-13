@@ -1,7 +1,10 @@
 import asyncio
 import time
-
+import gc
+import torch
 import discord
+import subprocess
+import os
 from discord.ext import commands
 
 from core.constants import (
@@ -12,28 +15,25 @@ from database.chat_memory import (
     add_chat_message,
     get_or_create_session,
 )
-from services.chat_service import ChatReply, generate_dynamic_reply
 from services.llm_service import LLMService
-from services.memory_service import store_memory_if_found
-from services.summary_service import maybe_update_summary
-from services.tool_router import ToolRouter
-
+from services.agent_dispatcher import AgentDispatcher
+from services.summary_service import maybe_update_summary # Re-added for memory consistency
 
 class ChatCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.user_cooldowns = {}
+        # Force local LLM initialization
         self.llm = getattr(bot, "llm_service", None) or LLMService()
         self.allowed_chat_channels = BOT_ALLOWED_CHAT_CHANNELS
-        self.tool_router = ToolRouter()
+        # Initialize the LangGraph Dispatcher
+        self.dispatcher = AgentDispatcher(bot)
 
     def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
         now = time.monotonic()
         last_used = self.user_cooldowns.get(user_id, 0.0)
-
         if now - last_used < seconds:
             return True
-
         self.user_cooldowns[user_id] = now
         return False
 
@@ -43,155 +43,144 @@ class ChatCommands(commands.Cog):
     def is_allowed_chat_channel(self, message: discord.Message) -> bool:
         if self.is_dm(message):
             return True
-
         if not hasattr(message.channel, "name"):
             return False
-
         return message.channel.name.lower() in self.allowed_chat_channels
 
-    def _build_chat_services(self) -> dict:
-        return {
-            "image_service": getattr(self.bot, "image_service", None),
-            "voice_service": getattr(self.bot, "voice_service", None),
-            "video_service": getattr(self.bot, "video_service", None),
-            "music_service": getattr(self.bot, "music_service", None),
-            "codegen_service": getattr(self.bot, "codegen_service", None),
-            "osint_service": getattr(self.bot, "osint_service", None),
-            "model_runtime_service": getattr(self.bot, "model_runtime_service", None),
-            "behavior_rule_service": getattr(self.bot, "behavior_rule_service", None),
-            "command_help_service": getattr(self.bot, "command_help_service", None),
-            "bot": self.bot,
-        }
+    @commands.command(name="status", aliases=["kiba", "vram"])
+    async def kiba_dashboard(self, ctx):
+        """Displays the 3090 Ti Status Dashboard."""
+        # 1. Get Hardware Stats
+        used_vram = self._get_vram_usage()
+        total_vram = 24576 # 3090 Ti Total
+        vram_pct = round((used_vram / total_vram) * 100, 1)
+        
+        # 2. Identify Active Model
+        active_engine = "Ollama (Qwen3-Coder)" # Default
+        if used_vram > 12000:
+            # Check service states
+            img_svc = getattr(self.bot, "image_service", None)
+            mus_svc = getattr(self.bot, "music_service", None)
+            
+            if img_svc and img_svc.pipeline:
+                active_engine = "FLUX.2 [Primary Media]"
+            elif mus_svc and mus_svc.active_model_type:
+                active_engine = f"YuE Studio ({mus_svc.active_model_type})"
 
-    def get_typing_delay(self, content: str) -> float:
-        cleaned = (content or "").strip()
-        if not cleaned:
-            return 0.35
+        # 3. Build the UI
+        embed = discord.Embed(
+            title="🐺 Kiba Local AI Dashboard",
+            color=discord.Color.dark_theme(),
+            timestamp=ctx.message.created_at
+        )
+        
+        # VRAM Progress Bar logic
+        bar_length = 15
+        filled = int((used_vram / total_vram) * bar_length)
+        vram_bar = "█" * filled + "░" * (bar_length - filled)
+        
+        embed.add_field(name="Current Active Engine", value=f"**{active_engine}**", inline=False)
+        embed.add_field(name="VRAM Utilization", value=f"`{vram_bar}` {vram_pct}%", inline=False)
+        embed.add_field(name="Used / Total", value=f"{used_vram} MB / {total_vram} MB", inline=True)
+        
+        status_color = "🟢 Stable" if vram_pct < 90 else "🔴 CRITICAL (OOM Risk)"
+        embed.add_field(name="Neural Stability", value=status_color, inline=True)
+        
+        embed.set_footer(text="3090 Ti | Sequential Offloading Active")
+        await ctx.send(embed=embed)
 
-        estimated_seconds = len(cleaned) / 90.0
-        return min(5.0, max(0.35, estimated_seconds))
+    @commands.command(name="hardware")    
+    async def hardware_stats(self, ctx):
+        """Shows real-time VRAM and Load for the 3090 Ti."""
+        try:
+            cmd = "nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,nounits,noheader"
+            result = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+            used, total, load = result.split(', ')
 
-    async def send_chat_message(self, destination, reply):
-        if isinstance(reply, str):
-            async with destination.typing():
-                await asyncio.sleep(self.get_typing_delay(reply))
-            await destination.send(reply)
-            return
+            embed = discord.Embed(
+                title="🖥️ Hardware Monitor (3090 Ti)", 
+                color=discord.Color.blue(),
+                description="Real-time status of the local inference engine."
+            )
+            embed.add_field(name="VRAM Usage", value=f"**{used} MB** / {total} MB", inline=True)
+            embed.add_field(name="GPU Load", value=f"**{load}%**", inline=True)
+            embed.add_field(name="Status", value="🟢 Online / Unfiltered", inline=False)
+            embed.set_footer(text="Running via local Ollama instance")
+            await ctx.send(embed=embed)
+        except Exception as e:
+            await ctx.send(f"❌ Could not retrieve GPU stats: {e}")
 
-        if not isinstance(reply, ChatReply):
-            text_reply = str(reply)
-            async with destination.typing():
-                await asyncio.sleep(self.get_typing_delay(text_reply))
-            await destination.send(text_reply)
-            return
+    @commands.command(name="boost")
+    async def turbo_mode(self, ctx):
+        """Manually clears GPU cache and system garbage collection."""
+        initial_vram = self._get_vram_usage()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            
+        final_vram = self._get_vram_usage()
+        freed = initial_vram - final_vram
+        embed = discord.Embed(
+            title="🚀 Turbo Mode Activated",
+            description=f"Cleared **{freed} MB** of VRAM.",
+            color=discord.Color.gold()
+        )
+        await ctx.send(embed=embed)
 
-        files = [discord.File(path) for path in reply.file_paths if path]
-        typing_delay = self.get_typing_delay(reply.content)
-
-        async with destination.typing():
-            await asyncio.sleep(typing_delay)
-
-        if files:
-            await destination.send(reply.content, files=files)
-            return
-
-        await destination.send(reply.content)
-
-    async def maybe_send_tool_ack(self, destination, content: str):
-        behavior_rule_service = getattr(self.bot, "behavior_rule_service", None)
-        if behavior_rule_service is not None:
-            if behavior_rule_service.looks_like_rule_request(content):
-                return
-            if behavior_rule_service.looks_like_rule_edit_request(content):
-                return
-
-        route_decision = self.tool_router.route(content)
-        acknowledgements = {
-            "image": "On it, generating that now...",
-            "voice": "On it, making that audio now...",
-            "video": "On it, starting that video request now...",
-            "music": "On it, composing that melody now...",
-        }
-
-        ack_message = acknowledgements.get(route_decision.tool_name)
-        if ack_message:
-            await destination.send(ack_message)
+    def _get_vram_usage(self):
+        cmd = "nvidia-smi --query-gpu=memory.used --format=csv,nounits,noheader"
+        return int(subprocess.check_output(cmd, shell=True).decode().strip())
 
     async def handle_chat_turn(self, destination, author, channel, content: str):
+        """Routes requests through LangGraph for hardware-aware agent dispatching."""
         user_id = str(author.id)
         channel_id = str(channel.id)
         session_id = await get_or_create_session(user_id, channel_id)
 
         await add_chat_message(session_id, "user", content)
 
-        stored_memory = await store_memory_if_found(self.llm, user_id, content)
-        if stored_memory:
-            key, value = stored_memory
-            reply_text = f"Got it. I'll remember that {key} is `{value}`."
-            await add_chat_message(session_id, "bot", reply_text)
-            await self.send_chat_message(destination, reply_text)
-            await maybe_update_summary(self.llm, user_id, channel_id, session_id)
+        async with destination.typing():
+            try:
+                # 1. Dispatch through LangGraph (handles VRAM swapping internally)
+                response_text, file_path = await self.dispatcher.run(user_id, content)
+                
+                # 2. Log and Store result
+                if response_text:
+                    await add_chat_message(session_id, "bot", response_text)
+                    await destination.send(response_text)
+                
+                # 3. Handle File Uploads (FLUX.2 renders)
+                if file_path and os.path.exists(file_path):
+                    # Use unique filename to avoid Discord caching issues
+                    filename = f"kiba_{int(time.time())}.png"
+                    file = discord.File(file_path, filename=filename)
+                    await destination.send(file=file)
+                    print(f"[DEBUG] Sent FLUX.2 render to {author.display_name}")
+                
+                # 4. Update Memory Summary (Only for text turns)
+                if not file_path:
+                    await maybe_update_summary(self.llm, user_id, channel_id, session_id)
+
+            except Exception as e:
+                print(f"[ERROR] Dispatcher failed: {e}")
+                await destination.send("❌ Kiba is experiencing a neural sync error. Check terminal.")
+
+    async def handle_natural_chat(self, message: discord.Message):
+        """Bridge for DM/Mention chat."""
+        if message.author.bot:
             return
 
-        await self.maybe_send_tool_ack(destination, content)
+        content = message.content.strip()
+        if self.bot.user in message.mentions:
+            mention_strings = [f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"]
+            for m in mention_strings:
+                content = content.replace(m, "").strip()
 
-        reply = await generate_dynamic_reply(
-            self.llm,
-            display_name=author.display_name,
-            user_id=user_id,
-            channel_id=channel_id,
-            session_id=session_id,
-            user_text=content,
-            services=self._build_chat_services(),
-        )
+        if not content:
+            return
 
-        await add_chat_message(session_id, "bot", reply.content)
-        await self.send_chat_message(destination, reply)
-        await maybe_update_summary(self.llm, user_id, channel_id, session_id)
-
-    async def maybe_handle_song_session(self, destination, author, channel, content: str) -> bool:
-        song_session_service = getattr(self.bot, "song_session_service", None)
-        music_service = getattr(self.bot, "music_service", None)
-        if song_session_service is None or music_service is None:
-            return False
-
-        user_id = str(author.id)
-        channel_id = str(channel.id)
-
-        if song_session_service.looks_like_song_request(content) and not song_session_service.has_session(user_id, channel_id):
-            question = song_session_service.begin_session(user_id, channel_id)
-            await destination.send("Let's build your vocal clip.")
-            await destination.send(question)
-            return True
-
-        if not song_session_service.has_session(user_id, channel_id):
-            return False
-
-        result = song_session_service.handle_response(user_id, channel_id, content)
-        if result["status"] == "retry":
-            await destination.send(result["message"])
-            return True
-
-        if result["status"] == "question":
-            await destination.send(result["message"])
-            return True
-
-        if result["status"] == "complete":
-            await destination.send(
-                "On it, generating your vocal clip now...\n"
-                f"{result['summary']}"
-            )
-            async with destination.typing():
-                melody_path = await music_service.generate_song_clip(
-                    vibe=result["vibe"],
-                    bpm=result["bpm"],
-                    voice_style=result["voice"],
-                    vocal_mode=result["vocal_mode"],
-                )
-            await destination.send(file=discord.File(melody_path))
-            return True
-
-        return False
+        await self.handle_chat_turn(message.channel, message.author, message.channel, content)
 
     @commands.command(aliases=["latency"])
     async def ping(self, ctx):
@@ -204,132 +193,48 @@ class ChatCommands(commands.Cog):
 
     @commands.command()
     async def about(self, ctx):
-        runtime_service = getattr(self.bot, "model_runtime_service", None)
-        provider = self.llm.provider
-        model_name = self.llm._get_active_model_name()
-        if runtime_service is not None:
-            provider = runtime_service.get_active_llm_provider()
-            model_name = runtime_service.get_active_llm_model()
-
         embed = discord.Embed(
             title="About Kiba Bot",
-            description="A modular Discord bot with expense tracking and chat features.",
+            description="3090 Ti Powered Local AI Hub.",
             color=discord.Color.blurple()
         )
-        embed.add_field(name="Prefix", value="`!`", inline=True)
-        embed.add_field(name="Mode", value="Prefix commands + agentic chat", inline=True)
-        embed.add_field(name="Provider", value=f"`{provider}`", inline=True)
-        embed.add_field(name="Model", value=f"`{model_name}`", inline=True)
-        embed.add_field(
-            name="Features",
-            value="Expense tracking, memory, summaries, intent-aware chat, lightweight planning, tool routing, and media/code helpers",
-            inline=False
-        )
+        embed.add_field(name="LLM Provider", value="`Ollama (Qwen3-Coder)`")
+        embed.add_field(name="Media Engine", value="`Diffusers (FLUX.2)`")
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["ask", "talk"])
     async def chat(self, ctx, *, message: str):
         await self.handle_chat_turn(ctx, ctx.author, ctx.channel, message)
 
-    @commands.command(aliases=["chathelp"])
-    async def helpchat(self, ctx):
-        embed = discord.Embed(
-            title="Chat Commands",
-            description="Available chat-related commands.",
-            color=discord.Color.blurple()
-        )
-        embed.add_field(name="Ping", value="`!ping`", inline=True)
-        embed.add_field(name="About", value="`!about`", inline=True)
-        embed.add_field(name="Chat", value="`!chat <message>`", inline=False)
-        embed.add_field(
-            name="Examples",
-            value=(
-                "`!chat hello`\n"
-                "`!chat help me plan a monthly budget`\n"
-                "`!chat my image prompt is a neon fox in the rain`\n"
-                "`!chat debug this python error`\n"
-                "`!chat whois openai.com`\n"
-                "`!chat what do you remember`\n"
-                "`!chat what day is today`"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="Passive Replies",
-            value=(
-                "DMs: freeform messages work automatically.\n"
-                "Servers: the bot replies when mentioned or when you reply to it in allowed channels."
-            ),
-            inline=False
-        )
-        await ctx.send(embed=embed)
+    @commands.command(name="studio")
+    async def set_studio_config(self, ctx, setting: str, value: str):
+        """
+        Configures the 3090 Ti Studio Engine.
+        Usage: !studio bpm 140 | !studio voice female | !studio mode lyrics
+        """
+        music_service = getattr(self.bot, "music_service", None)
+        if not music_service:
+            return await ctx.send("❌ Music Service not loaded.")
 
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        if message.author.bot:
-            return
-
-        if self.bot.user is None:
-            return
-
-        if message.content.startswith("!"):
-            return
-
-        is_dm = self.is_dm(message)
-        is_mentioned = self.bot.user in message.mentions
-
-        is_reply_to_bot = False
-        if message.reference and message.reference.resolved:
-            referenced_message = message.reference.resolved
-            if referenced_message and referenced_message.author == self.bot.user:
-                is_reply_to_bot = True
-
-        if not is_dm and not is_mentioned and not is_reply_to_bot:
-            return
-
-        if not self.is_allowed_chat_channel(message):
-            return
-
-        if self.is_on_cooldown(message.author.id):
-            return
-
-        content = message.content.strip()
-
-        if is_mentioned:
-            mention_strings = [
-                self.bot.user.mention,
-                f"<@!{self.bot.user.id}>",
-                f"<@{self.bot.user.id}>",
-            ]
-            for mention in mention_strings:
-                content = content.replace(mention, "").strip()
-
-        if not content:
-            user_id = str(message.author.id)
-            channel_id = str(message.channel.id)
-            session_id = await get_or_create_session(user_id, channel_id)
-
-            if is_dm:
-                reply = (
-                    f"Hey {message.author.display_name}, you can just talk to me here. "
-                    "Tell me what you want to get done and I’ll help."
-                )
+        setting = setting.lower()
+        try:
+            if setting == "bpm":
+                music_service.update_studio_settings(bpm=int(value))
+            elif setting == "voice":
+                music_service.update_studio_settings(voice=value)
+            elif setting == "mode":
+                music_service.update_studio_settings(mode=value)
             else:
-                reply = (
-                    f"Hey {message.author.display_name}, tell me what you're trying to do. "
-                    "I can answer, plan, troubleshoot, or use tools when it helps."
-                )
-
-            await add_chat_message(session_id, "bot", reply)
-            await self.send_chat_message(message.channel, reply)
-            await maybe_update_summary(self.llm, user_id, channel_id, session_id)
-            return
-
-        if await self.maybe_handle_song_session(message.channel, message.author, message.channel, content):
-            return
-
-        await self.handle_chat_turn(message.channel, message.author, message.channel, content)
-
+                return await ctx.send("❓ Unknown setting. Use: bpm, voice, or mode.")
+                
+            embed = discord.Embed(
+                title="🎼 Studio Profile Updated",
+                description=f"**{setting.upper()}** set to `{value}`",
+                color=discord.Color.purple()
+            )
+            await ctx.send(embed=embed)
+        except ValueError:
+            await ctx.send("❌ Invalid value. BPM must be a number.")
 
 async def setup(bot):
     await bot.add_cog(ChatCommands(bot))

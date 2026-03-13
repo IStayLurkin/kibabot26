@@ -1,34 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-# Virtual env
 .venv/
-venv/
-
-# Environment files
+__pycache__/
 .env
-
-# Database / local data
-*.db
-*.sqlite
-*.sqlite3
-expenses_export.json
-expenses_import.json
-
-# VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Media
 generated_media/
+full_bot_audit.txt
+*.mp3
+*.png
