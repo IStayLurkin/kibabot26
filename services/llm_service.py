@@ -317,11 +317,11 @@ class LLMService:
             return [active_provider]
 
         chains = {
-            "openai": ["openai", "hf", "ollama"],
-            "hf": ["hf", "openai", "ollama"],
+            "openai": ["ollama", "openai", "hf"],
+            "hf": ["ollama", "hf", "openai"],
             "ollama": ["ollama", "openai", "hf"],
         }
-        return chains.get(self.provider, ["openai", "hf", "ollama"])
+        return chains.get(self.provider, ["ollama", "openai", "hf"])
 
     def _get_model_for_provider(self, provider: str, media_type: str = "llm") -> str:
         if self.model_runtime_service is not None:
