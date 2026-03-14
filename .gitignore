@@ -7,3 +7,4 @@ full_bot_audit.txt
 *.png
 
 *.db
+.venv_claude/
