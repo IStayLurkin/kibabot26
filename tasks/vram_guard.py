@@ -2,7 +2,10 @@ import torch
 import gc
 import asyncio
 import subprocess
+import logging
 from discord.ext import tasks, commands
+
+logger = logging.getLogger(__name__)
 
 class VRAMGuard(commands.Cog):
     def __init__(self, bot):
@@ -16,14 +19,32 @@ class VRAMGuard(commands.Cog):
         self.guard_loop.cancel()
 
     def _get_vram_usage_mb(self) -> int:
-        """Direct hardware query for current 3090 Ti memory usage."""
         try:
-            cmd = "nvidia-smi --query-gpu=memory.used --format=csv,nounits,noheader"
-            result = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+            # Secure method: List syntax + shell=False
+            cmd = ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,nounits,noheader"]
+            result = subprocess.check_output(cmd, shell=False).decode('utf-8').strip()
             return int(result)
         except Exception as e:
-            print(f"[VRAM Guard Error] Could not query nvidia-smi: {e}")
+            logger.error(f"[VRAM Guard] Hardware query failed: {e}")
             return 0
+
+    # --- NEW: MANUAL CLEAR ADDITION ---
+    async def force_clear(self):
+        """Manual trigger to dump VRAM across all local services."""
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+        return self._get_vram_usage_mb()
+
+    # --- NEW: COMMAND FOR STREAMING FEEDBACK ---
+    @commands.command(name="vram")
+    @commands.is_owner()
+    async def vram_status(self, ctx):
+        """Check current 3090 Ti VRAM and hardware status."""
+        usage = self._get_vram_usage_mb()
+        status = "🟢 HEALTHY" if usage < self.vram_threshold_mb else "🔴 HIGH USAGE"
+        await ctx.send(f"📊 **3090 Ti VRAM Status:** `{usage}MB / 24576MB` | Status: {status}")
 
     @tasks.loop(minutes=5)
     async def guard_loop(self):

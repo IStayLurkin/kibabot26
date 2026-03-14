@@ -1,16 +1,22 @@
 import os
+import torch  # Required for the hardware check
 from dotenv import load_dotenv
 from core.constants import BOT_DEFAULT_PREFIX
 
 load_dotenv()
+
+# --- HARDWARE PREFERENCE DEFINITION (Moved up to fix NameError) ---
+CUDA_PREFERRED = os.getenv("CUDA_PREFERRED", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+# Force CUDA context for the 3090 Ti if preferred and available
+if CUDA_PREFERRED and torch.cuda.is_available():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+# --- DRIVE REDIRECTION ---
 os.environ["HF_HOME"] = "G:/huggingface_cache"
 os.environ["TORCH_HOME"] = "G:/torch_cache"
 os.environ["OLLAMA_MODELS"] = "G:/ollamamodels"
 os.environ["PIP_CACHE_DIR"] = "G:/pip_cache"
-
-# Force CUDA context for the 3090 Ti
-if CUDA_PREFERRED:
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def _parse_int_list(value: str) -> list[int]:
     values = []
@@ -32,7 +38,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 BOT_PREFIX = os.getenv("BOT_PREFIX", BOT_DEFAULT_PREFIX)
 BOT_TIMEZONE = os.getenv("BOT_TIMEZONE", "America/Los_Angeles")
-CUDA_PREFERRED = os.getenv("CUDA_PREFERRED", "true").strip().lower() in {"1", "true", "yes", "on"}
+
 PREFERRED_LOCAL_IMAGE_BACKEND = os.getenv("PREFERRED_LOCAL_IMAGE_BACKEND", "automatic1111").strip().lower()
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()

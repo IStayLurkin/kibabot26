@@ -5,9 +5,12 @@ import os
 import time
 import uuid
 import wave
+import asyncio
+import subprocess
 from math import pi, sin
 from pathlib import Path
 from typing import Any
+from faster_whisper import WhisperModel  # pip install faster-whisper
 
 from core.config import MEDIA_SAFETY_MODE
 from core.feature_flags import MEDIA_OUTPUT_DIR
@@ -22,20 +25,47 @@ class VoiceService:
         self.performance_tracker = performance_tracker
         self.output_dir = Path(MEDIA_OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # 2026 Hardware Optimization: Using 3090 Ti for Whisper inference
+        self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+
+    # --- NEW: 3090 Ti SPEECH TO TEXT ---
+    async def speech_to_text(self, audio_path: str) -> str:
+        """
+        2026 Expansion: Converts user voice to text using local GPU.
+        Decoupled from main loop to prevent stream lag.
+        """
+        started_at = time.perf_counter()
+        loop = asyncio.get_event_loop()
+        def transcribe():
+            segments, info = self.stt_model.transcribe(audio_path, beam_size=5)
+            return " ".join([s.text for s in segments])
+        
+        result = await loop.run_in_executor(None, transcribe)
+        self._record_duration("voice.speech_to_text", started_at)
+        return result
 
     async def text_to_speech(self, text: str) -> str:
         """
-        Adapter-first design.
-
-        Expected provider return formats:
-
-        1. local file path string
-        2. raw bytes
-        3. {"file_path": "..."}
-        4. {"audio_bytes": b"..."}
+        Adapter-first design upgraded with 2026 Local Piper support.
+        Preserves original fallback loop.
         """
 
         started_at = time.perf_counter()
+        
+        # --- NEW: TRY LOCAL PIPER FIRST ---
+        try:
+            filename = f"piper_{uuid.uuid4().hex}.wav"
+            path = self.output_dir / filename
+            # High speed local TTS (Ensure piper.exe is on your G: drive)
+            command = ["piper", "--model", "en_US-kiba-medium.onnx", "--output_file", str(path)]
+            proc = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE)
+            await proc.communicate(input=text.encode())
+            if path.exists():
+                return str(path)
+        except Exception as e:
+            logger.warning("Local Piper TTS failed, falling back to original logic: %s", e)
+
+        # --- PRESERVED ORIGINAL PROVIDER LOOP ---
         try:
             last_error: Exception | None = None
             if self.llm_service is not None:
@@ -82,8 +112,7 @@ class VoiceService:
                     "voice.text_to_speech",
                     (time.perf_counter() - started_at) * 1000,
                 )
-        print(f"[DEBUG] Voice/TTS Request -> Engine: {self.provider} | Local: True")
-        print(f"[DEBUG] Voice/TTS Request -> Engine: {self.provider} | Audioop: Native (3.12)")
+
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):
             if os.path.exists(result):
@@ -146,3 +175,12 @@ class VoiceService:
             wav_file.writeframes(bytes(frames))
 
         return str(path)
+
+    def _record_duration(self, name: str, started_at: float) -> None:
+        if self.performance_tracker is None:
+            return
+
+        self.performance_tracker.record_service_call(
+            name,
+            (time.perf_counter() - started_at) * 1000,
+        )

@@ -24,12 +24,7 @@ class WhoisSummary:
 class OSINTService:
     """
     Safe public-info OSINT only.
-
-    Intended uses:
-    - public domain RDAP lookup
-    - basic DNS resolution
-    - SSL certificate subject/issuer peek
-    - summarization of supplied public text
+    Preserved original architecture with 2026 Agentic Dossier additions.
     """
 
     def __init__(self, performance_tracker=None) -> None:
@@ -50,6 +45,25 @@ class OSINTService:
             "Use specific commands like !whois <domain> for domain intelligence, "
             "or provide public text/data to summarize."
         )
+
+    # --- NEW: AGENTIC DOSSIER ADDITION ---
+    async def run_dossier(self, target: str) -> str:
+        """
+        2026 Expansion: Runs lookups in parallel for a target.
+        Leverages 3090 Ti concurrent execution.
+        """
+        started_at = time.perf_counter()
+        
+        # Gathering your original lookup methods in parallel
+        tasks = [
+            self.dns_lookup(target),
+            self.ssl_lookup(target),
+            self.whois_lookup(target)
+        ]
+        results = await asyncio.gather(*tasks)
+        
+        self._record_duration("osint.run_dossier", started_at)
+        return "\n\n--- 🕵️ AGENTIC DOSSIER REPORT ---\n\n" + "\n\n".join(results)
 
     async def whois_lookup(self, domain: str) -> str:
         domain = self._normalize_domain(domain)

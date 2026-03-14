@@ -31,7 +31,7 @@ Agent Policy:
 """
 
 # Parameters tuned for your 3090 Ti
-PARAMETER temperature 0.0
+PARAMETER temperature 0.8
 PARAMETER num_ctx 32768
 PARAMETER stop "<|im_start|>"
 PARAMETER stop "<|im_end|>"

@@ -5,111 +5,146 @@ import torch
 import asyncio
 import subprocess
 import aiohttp
+import warnings
 from typing import Optional
 
-# 2026 Updated Imports for FLUX.2 and 4-bit Quantization
 try:
-    from diffusers import Flux2Pipeline 
-    from transformers import BitsAndBytesConfig
+    from transformers import BitsAndBytesConfig, Mistral3ForConditionalGeneration
+    from diffusers import Flux2Pipeline, Flux2Transformer2DModel, StableDiffusionXLPipeline
 except ImportError:
     Flux2Pipeline = None
-    BitsAndBytesConfig = None
+    Flux2Transformer2DModel = None
+    Mistral3ForConditionalGeneration = None
+    StableDiffusionXLPipeline = None
+
+FLUX2_REPO = "diffusers/FLUX.2-dev-bnb-4bit"
+SDXL_REPO = "stabilityai/stable-diffusion-xl-base-1.0"
 
 class ImageService:
-    def __init__(self, model_id: str = "black-forest-labs/FLUX.2-dev", **kwargs):
-        self.model_id = model_id
+    def __init__(self, **kwargs):
         self.pipeline = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.current_engine = None # Tracks 'FLUX' or 'SDXL'
         self.output_dir = "outputs/images"
+        self._last_activity = 0
+        self._unload_task = None
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _get_vram_usage(self) -> int:
-        """Helper to get current VRAM usage in MB for the 3090 Ti."""
         try:
             cmd = "nvidia-smi --query-gpu=memory.used --format=csv,nounits,noheader"
-            result = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
-            return int(result)
-        except Exception:
-            return 0
+            return int(subprocess.check_output(cmd, shell=False).decode().strip())
+        except: return 0
 
-    async def _unload_ollama(self):
-        """Forces Ollama to unload Qwen3 from VRAM to make room for FLUX.2."""
-        try:
-            print("[DEBUG] Requesting Ollama to unload models...")
-            async with aiohttp.ClientSession() as session:
-                # keep_alive: 0 forces immediate ejection from VRAM
-                async with session.post(
-                    "http://localhost:11434/api/chat",
-                    json={"model": "qwen3-coder:7b", "keep_alive": 0}
-                ) as resp:
-                    if resp.status == 200:
-                        print("[DEBUG] Qwen3-Coder unloaded.")
-            await asyncio.sleep(2) # Settle time
-        except Exception as e:
-            print(f"[DEBUG] Could not unload Ollama: {e}")
+    def _purge_vram(self):
+        """Clears the 3090 Ti completely before swapping engines."""
+        if self.pipeline is not None:
+            print(f"[DEBUG] Purging {self.current_engine} from VRAM...")
+            self.pipeline = None
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
-    def _load_pipeline(self):
-        """Optimized FLUX.2 loader for 24GB VRAM using NF4 Quantization."""
-        if self.pipeline is None and Flux2Pipeline is not None:
-            print("[DEBUG] Initializing FLUX.2 [dev] with 4-bit Quantization...")
-            
-            # Mandatory config to fit 32B model into 3090 Ti VRAM
-            quant_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_quant_type="nf4"
-            )
-
-            self.pipeline = Flux2Pipeline.from_pretrained(
-                self.model_id,
-                torch_dtype=torch.bfloat16,
-                quantization_config=quant_config,
-                device_map="auto" 
-            )
-            
-            # Essential for preventing OOM crashes during the forward pass
-            self.pipeline.enable_sequential_cpu_offload()
-            print("[DEBUG] FLUX.2 Primary Engine Online.")
-
-    async def generate_image(self, prompt: str) -> Optional[str]:
-        """Async entry point for high-fidelity local generation."""
-        await self._unload_ollama()
+    def _load_flux(self):
+        """Loads the heavy FLUX.2 engine."""
+        if self.current_engine == "FLUX" and self.pipeline is not None:
+            return
+        self._purge_vram()
+        print("[DEBUG] Loading FLUX.2 (4-bit) to GPU...")
         
-        gc.collect()
-        torch.cuda.empty_cache()
-        
-        current_vram = self._get_vram_usage()
-        print(f"[DEBUG] VRAM after Ollama unload: {current_vram}MB. Starting FLUX.2...")
+        transformer = Flux2Transformer2DModel.from_pretrained(
+            FLUX2_REPO, subfolder="transformer", torch_dtype=torch.bfloat16,
+            device_map={"": 0}, low_cpu_mem_usage=True, local_files_only=True
+        )
+        text_encoder = Mistral3ForConditionalGeneration.from_pretrained(
+            FLUX2_REPO, subfolder="text_encoder", torch_dtype=torch.bfloat16,
+            device_map={"": 0}, low_cpu_mem_usage=True, local_files_only=True, tie_word_embeddings=False
+        )
+        self.pipeline = Flux2Pipeline.from_pretrained(
+            FLUX2_REPO, transformer=transformer, text_encoder=text_encoder, torch_dtype=torch.bfloat16
+        )
+        self.pipeline.vae.to("cuda")
+        self.current_engine = "FLUX"
 
-        filename = f"kiba_flux2_{int(time.time())}.png"
+    def _load_sdxl(self):
+        """Loads the high-speed SDXL engine."""
+        if self.current_engine == "SDXL" and self.pipeline is not None:
+            return
+        self._purge_vram()
+        print("[DEBUG] Loading SDXL (FP16) to GPU...")
+        
+        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+            SDXL_REPO, torch_dtype=torch.float16, variant="fp16", use_safetensors=True
+        ).to("cuda")
+        self.current_engine = "SDXL"
+
+    async def generate_image(self, prompt: str, progress_callback=None) -> Optional[str]:
+        """Entry for !draw (FLUX)"""
+        return await self._run_gen(prompt, "FLUX", progress_callback)
+
+    async def generate_sdxl(self, prompt: str, progress_callback=None) -> Optional[str]:
+        """Entry for !fast (SDXL)"""
+        return await self._run_gen(prompt, "SDXL", progress_callback)
+
+    async def _run_gen(self, prompt, mode, callback):
+        filename = f"kiba_{mode.lower()}_{int(time.time())}.png"
         filepath = os.path.join(self.output_dir, filename)
-
         try:
-            return await asyncio.to_thread(self._generate_sync, prompt, filepath)
+            return await asyncio.to_thread(self._generate_sync, prompt, filepath, mode, callback)
         except Exception as e:
-            print(f"[ERROR] FLUX.2 Generation Failed: {e}")
+            print(f"[ERROR] {mode} Failed: {e}")
             return None
 
-    def _generate_sync(self, prompt: str, filepath: str) -> str:
-        """Synchronous worker for FLUX.2 generation."""
-        self._load_pipeline()
-        
-        if self.pipeline is None:
-            raise RuntimeError("Flux2Pipeline failed to load. Check 'pip install bitsandbytes'.")
+    def _generate_sync(self, prompt, filepath, mode, callback):
+            try: 
+                main_loop = asyncio.get_event_loop()
+            except: 
+                main_loop = None
 
-        image = self.pipeline(
-            prompt,
-            height=1024,
-            width=1024,
-            guidance_scale=3.5,
-            num_inference_steps=28,
-            max_sequence_length=512,
-        ).images[0]
-        
-        image.save(filepath)
-        
-        # Clear VRAM so the Dispatcher can reload Qwen3-Coder
-        torch.cuda.empty_cache()
-        gc.collect()
+            if mode == "FLUX":
+                self._load_flux()
+                steps = 14
+            else:
+                self._load_sdxl()
+                steps = 30
+
+            # THREAD-SAFE RATE LIMITING: Only update Discord once per second
+            self.last_update_time = 0 
+
+            def pipe_callback(pipe, step, timestep, callback_kwargs):
+                if callback:
+                    now = time.time()
+                    # Throttles updates to prevent Discord Rate Limit (429) errors
+                    if now - self.last_update_time >= 1.0 or step == steps:
+                        percent = int((step / steps) * 100)
+                        vram = round(self._get_vram_usage() / 1024, 1)
+                        callback(percent, vram)
+                        self.last_update_time = now
+                return callback_kwargs
+
+            # Fix for the 'FutureWarning' in your logs
+            if mode == "SDXL" and hasattr(self.pipeline, "vae"):
+                self.pipeline.vae.to(torch.float32)
+
+            image = self.pipeline(
+                prompt=prompt, 
+                num_inference_steps=steps,
+                callback_on_step_end=pipe_callback,
+                height=1024, 
+                width=1024
+            ).images[0]
             
-        return filepath
+            image.save(filepath)
+            if main_loop: 
+                main_loop.call_soon_threadsafe(self._update_activity)
+                
+            return filepath
+
+    def _update_activity(self):
+        self._last_activity = time.time()
+        if self._unload_task: self._unload_task.cancel()
+        self._unload_task = asyncio.create_task(self._inactivity_monitor())
+
+    async def _inactivity_monitor(self):
+        await asyncio.sleep(300)
+        self._purge_vram()
+        self.current_engine = None

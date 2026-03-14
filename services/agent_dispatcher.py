@@ -4,6 +4,11 @@ from langgraph.graph import StateGraph, END
 from services.llm_service import LLMService
 from services.image_service import ImageService
 from services.music_service import MusicService
+from database.chat_memory import (
+    get_user_memory, 
+    get_conversation_summary, 
+    get_conversation_state
+)
 
 # Define the Agent State
 class AgentState(TypedDict):
@@ -52,25 +57,56 @@ class AgentDispatcher:
         return graph.compile()
 
     def router_node(self, state: AgentState):
-        """Hardware-aware intent detection to prevent VRAM 'crossing wires'."""
-        content = state["messages"][-1].lower()
-        
-        # Audio/Music Triggers
-        music_triggers = ["sing", "song", "melody", "music", "audio", "vocal", "lyrics"]
-        # Image Triggers
-        media_triggers = ["draw", "generate", "image", "visual", "create a picture", "flux"]
-        
-        if any(trigger in content for trigger in music_triggers):
-            return {**state, "next_step": "sing"}
-        if any(trigger in content for trigger in media_triggers):
-            return {**state, "next_step": "draw"}
+            content = state["messages"][-1].lower()
             
-        return {**state, "next_step": "chat"}
+            creative_override = any(word in content for word in ["imagine", "create", "fictional", "make up", "pretend"])
+            music_triggers = ["sing", "song", "melody", "music", "audio", "vocal", "lyrics"]
+            media_triggers = ["draw", "generate", "image", "visual", "create a picture", "flux"]
+            
+            if any(trigger in content for trigger in music_triggers):
+                if not creative_override and "real" in content:
+                    return {**state, "next_step": "chat"} 
+                return {**state, "next_step": "sing"}
+                
+            if any(trigger in content for trigger in media_triggers):
+                if not creative_override and "real" in content:
+                    return {**state, "next_step": "chat"}
+                return {**state, "next_step": "draw"}
+                
+            return {**state, "next_step": "chat"}
 
     async def coding_node(self, state: AgentState):
-        """Standard LLM interaction via Qwen3-Coder (Resident Ollama)."""
+        """Dialed-in node that injects Brandon's memory and hardware context."""
+        user_id = state["user_id"]
+        channel_id = state.get("channel_id", "default")
         prompt = state["messages"][-1]
-        response = await self.llm.generate_response(prompt)
+
+        # 1. Retrieve Brandon's facts and recent history from the G: drive DB
+        memory_rows = await get_user_memory(user_id)
+        user_context = "\n".join([f"- {k}: {v}" for k, v in memory_rows])
+        summary = await get_conversation_summary(user_id, channel_id)
+        state_data = await get_conversation_state(user_id, channel_id)
+
+        # 2. Build the hardware-aware preamble
+        # This forces the model to acknowledge its 3090 Ti environment
+        hardware_context = (
+            "SYSTEM CONTEXT:\n"
+            "Environment: Local RTX 3090 Ti | 24GB VRAM | G: Drive Storage.\n"
+            f"User Identity: {user_context if user_context else 'Brandon (Owner)'}.\n"
+            f"Recent Summary: {summary}\n"
+        )
+
+        # 3. Call LLM with full context injection
+        response = await self.llm.generate_reply(
+            user_display_name="Brandon",
+            user_message=f"{hardware_context}\n\nUser Request: {prompt}",
+            memory=dict(memory_rows),
+            recent_messages=[], # LLMService handles history via session_id
+            conversation_summary=summary,
+            intent_category=state_data.get("last_intent"),
+            conversation_goal=state_data.get("goal")
+        )
+
         return {"messages": [response]}
 
     async def media_node(self, state: AgentState):
@@ -78,7 +114,6 @@ class AgentDispatcher:
         self.bot.is_generating = True
         try:
             prompt = state["messages"][-1]
-            # This handles the Ollama unload and FLUX.2 load internally
             image_path = await self.image_gen.generate_image(prompt)
             
             if image_path and os.path.exists(image_path):
@@ -96,9 +131,7 @@ class AgentDispatcher:
         try:
             prompt = state["messages"][-1]
             
-            # Determine if it's a song or just a melody
             if any(word in prompt.lower() for word in ["sing", "lyrics", "song", "vocal"]):
-                # Request a full song clip (YuE)
                 audio_path = await self.music_gen.generate_song_clip(
                     vibe="cinematic", 
                     bpm=120, 
@@ -107,7 +140,6 @@ class AgentDispatcher:
                     lyrics=prompt
                 )
             else:
-                # Request a background melody (Stable Audio Open)
                 audio_path = await self.music_gen.generate_melody(prompt)
 
             if audio_path and os.path.exists(audio_path):
@@ -119,11 +151,12 @@ class AgentDispatcher:
         finally:
             self.bot.is_generating = False
 
-    async def run(self, user_id: str, content: str):
-        """Dispatcher entry point. Returns a tuple of (response_text, file_path_to_upload)."""
+    async def run(self, user_id: str, channel_id: str, content: str):
+        """Dispatcher entry point. Now correctly routes channel_id for memory lookup."""
         inputs = {
             "messages": [content], 
             "user_id": user_id, 
+            "channel_id": channel_id,
             "next_step": "", 
             "file_path": None
         }

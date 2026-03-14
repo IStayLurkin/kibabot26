@@ -5,3 +5,5 @@ generated_media/
 full_bot_audit.txt
 *.mp3
 *.png
+
+*.db

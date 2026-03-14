@@ -17,7 +17,7 @@ from database.chat_memory import (
 )
 from services.llm_service import LLMService
 from services.agent_dispatcher import AgentDispatcher
-from services.summary_service import maybe_update_summary # Re-added for memory consistency
+from services.summary_service import maybe_update_summary 
 
 class ChatCommands(commands.Cog):
     def __init__(self, bot):
@@ -28,6 +28,8 @@ class ChatCommands(commands.Cog):
         self.allowed_chat_channels = BOT_ALLOWED_CHAT_CHANNELS
         # Initialize the LangGraph Dispatcher
         self.dispatcher = AgentDispatcher(bot)
+        # Reference to the image service for easy access
+        self.image_service = getattr(bot, "image_service", None)
 
     def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
         now = time.monotonic()
@@ -47,34 +49,31 @@ class ChatCommands(commands.Cog):
             return False
         return message.channel.name.lower() in self.allowed_chat_channels
 
-    @commands.command(name="status", aliases=["kiba", "vram"])
+    @commands.command(name="status", aliases=["kiba", "kb"])
     async def kiba_dashboard(self, ctx):
         """Displays the 3090 Ti Status Dashboard."""
-        # 1. Get Hardware Stats
         used_vram = self._get_vram_usage()
-        total_vram = 24576 # 3090 Ti Total
+        total_vram = 24576 
         vram_pct = round((used_vram / total_vram) * 100, 1)
         
-        # 2. Identify Active Model
-        active_engine = "Ollama (Qwen3-Coder)" # Default
+        active_engine = "Ollama (Qwen3-Coder)"
         if used_vram > 12000:
-            # Check service states
-            img_svc = getattr(self.bot, "image_service", None)
+            img_svc = self.image_service
             mus_svc = getattr(self.bot, "music_service", None)
             
             if img_svc and img_svc.pipeline:
-                active_engine = "FLUX.2 [Primary Media]"
+                # Identify if we are in FLUX or SDXL mode
+                engine_name = getattr(img_svc, "current_engine", "FLUX.2")
+                active_engine = f"{engine_name} [Active Media]"
             elif mus_svc and mus_svc.active_model_type:
                 active_engine = f"YuE Studio ({mus_svc.active_model_type})"
 
-        # 3. Build the UI
         embed = discord.Embed(
             title="🐺 Kiba Local AI Dashboard",
             color=discord.Color.dark_theme(),
             timestamp=ctx.message.created_at
         )
         
-        # VRAM Progress Bar logic
         bar_length = 15
         filled = int((used_vram / total_vram) * bar_length)
         vram_bar = "█" * filled + "░" * (bar_length - filled)
@@ -86,15 +85,15 @@ class ChatCommands(commands.Cog):
         status_color = "🟢 Stable" if vram_pct < 90 else "🔴 CRITICAL (OOM Risk)"
         embed.add_field(name="Neural Stability", value=status_color, inline=True)
         
-        embed.set_footer(text="3090 Ti | Sequential Offloading Active")
+        embed.set_footer(text="3090 Ti | Multi-Engine Hot-Swapping Active")
         await ctx.send(embed=embed)
 
     @commands.command(name="hardware")    
     async def hardware_stats(self, ctx):
         """Shows real-time VRAM and Load for the 3090 Ti."""
         try:
-            cmd = "nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,nounits,noheader"
-            result = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+            cmd = ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,nounits,noheader"]
+            result = subprocess.check_output(cmd, shell=False).decode('utf-8').strip()
             used, total, load = result.split(', ')
 
             embed = discord.Embed(
@@ -105,7 +104,7 @@ class ChatCommands(commands.Cog):
             embed.add_field(name="VRAM Usage", value=f"**{used} MB** / {total} MB", inline=True)
             embed.add_field(name="GPU Load", value=f"**{load}%**", inline=True)
             embed.add_field(name="Status", value="🟢 Online / Unfiltered", inline=False)
-            embed.set_footer(text="Running via local Ollama instance")
+            embed.set_footer(text="Running via local hardware")
             await ctx.send(embed=embed)
         except Exception as e:
             await ctx.send(f"❌ Could not retrieve GPU stats: {e}")
@@ -128,58 +127,123 @@ class ChatCommands(commands.Cog):
         )
         await ctx.send(embed=embed)
 
+    @commands.command(name="dossier", aliases=["intel", "research"])
+    async def dossier(self, ctx, target: str):
+        """Triggers the new 2026 Agentic OSINT Research Loop."""
+        osint_svc = getattr(self.bot, "osint_service", None)
+        if not osint_svc:
+            return await ctx.send("❌ OSINT Service not active.")
+            
+        async with ctx.typing():
+            report = await osint_svc.run_dossier(target)
+            await ctx.send(report)
+
+    # --- IMAGE GENERATION COMMANDS ---
+
+    @commands.command(name="draw")
+    async def draw_flux(self, ctx, *, prompt: str):
+        """Generates High-Quality imagery using FLUX.2 (Slow/Detailed)."""
+        await self.handle_image_request(ctx, prompt, mode="FLUX")
+
+    @commands.command(name="fast", aliases=["quick"])
+    async def draw_sdxl(self, ctx, *, prompt: str):
+        """Generates High-Speed imagery using SDXL (Fast/Stylized)."""
+        await self.handle_image_request(ctx, prompt, mode="SDXL")
+
+    async def handle_image_request(self, ctx, prompt: str, mode: str = "FLUX"):
+        gallery_channel_id = 1482242041755861032
+        icon = "🎨" if mode == "FLUX" else "⚡"
+        
+        status_msg = await ctx.send(f"{icon} **Kiba is initializing {mode} on the 3090 Ti...**\n[░░░░░░░░░░] 0%")
+
+        def update_bar(percent, vram_gb):
+            blocks = int(percent / 10)
+            bar = "█" * blocks + "░" * (10 - blocks)
+            asyncio.run_coroutine_threadsafe(
+                status_msg.edit(content=(
+                    f"{icon} **Kiba is rendering ({mode})...**\n"
+                    f"[{bar}] {percent}%\n"
+                    f"📟 **VRAM:** {vram_gb}GB / 24.0GB"
+                )),
+                self.bot.loop
+            )
+
+        # Call the unified service logic
+        if mode == "SDXL":
+            path = await self.image_service.generate_sdxl(prompt, progress_callback=update_bar)
+        else:
+            path = await self.image_service.generate_image(prompt, progress_callback=update_bar)
+
+        if path:
+            await status_msg.edit(content=f"✅ **{mode} Generation Complete!**")
+            
+            image_file = discord.File(path, filename=f"kiba_{mode.lower()}.png")
+            await ctx.send(content=f"Request: *{prompt}* ({mode} Engine)", file=image_file)
+
+            # Archive to Gallery
+            gallery_channel = self.bot.get_channel(gallery_channel_id)
+            if gallery_channel:
+                archive_file = discord.File(path, filename=f"archive_{mode.lower()}.png")
+                await gallery_channel.send(
+                    content=f"🖼️ **Engine:** {mode}\n👤 **User:** {ctx.author.mention}\n📝 **Prompt:** {prompt}",
+                    file=archive_file
+                )
+        else:
+            await status_msg.edit(content=f"❌ **{mode} Engine Error.** Check terminal.")
+
+    # --- CORE CHAT LOGIC ---
+
     def _get_vram_usage(self):
-        cmd = "nvidia-smi --query-gpu=memory.used --format=csv,nounits,noheader"
-        return int(subprocess.check_output(cmd, shell=True).decode().strip())
+        cmd = ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,nounits,noheader"]
+        return int(subprocess.check_output(cmd, shell=False).decode().strip())
 
     async def handle_chat_turn(self, destination, author, channel, content: str):
-        """Routes requests through LangGraph for hardware-aware agent dispatching."""
         user_id = str(author.id)
         channel_id = str(channel.id)
         session_id = await get_or_create_session(user_id, channel_id)
+
+        attachments = getattr(destination, "attachments", [])
+        if attachments:
+            for attachment in attachments:
+                if any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg', '.m4a']):
+                    voice_svc = getattr(self.bot, "voice_service", None)
+                    if voice_svc:
+                        temp_path = f"temp_{attachment.filename}"
+                        await attachment.save(temp_path)
+                        transcription = await voice_svc.speech_to_text(temp_path)
+                        content = f"{content} [Transcribed Voice]: {transcription}"
+                        if os.path.exists(temp_path): os.remove(temp_path)
 
         await add_chat_message(session_id, "user", content)
 
         async with destination.typing():
             try:
-                # 1. Dispatch through LangGraph (handles VRAM swapping internally)
-                response_text, file_path = await self.dispatcher.run(user_id, content)
+                response_text, file_path = await self.dispatcher.run(user_id, channel_id, content)
                 
-                # 2. Log and Store result
                 if response_text:
                     await add_chat_message(session_id, "bot", response_text)
                     await destination.send(response_text)
                 
-                # 3. Handle File Uploads (FLUX.2 renders)
                 if file_path and os.path.exists(file_path):
-                    # Use unique filename to avoid Discord caching issues
                     filename = f"kiba_{int(time.time())}.png"
                     file = discord.File(file_path, filename=filename)
                     await destination.send(file=file)
-                    print(f"[DEBUG] Sent FLUX.2 render to {author.display_name}")
                 
-                # 4. Update Memory Summary (Only for text turns)
                 if not file_path:
                     await maybe_update_summary(self.llm, user_id, channel_id, session_id)
 
             except Exception as e:
                 print(f"[ERROR] Dispatcher failed: {e}")
-                await destination.send("❌ Kiba is experiencing a neural sync error. Check terminal.")
+                await destination.send("❌ Neural sync error. Check terminal.")
 
     async def handle_natural_chat(self, message: discord.Message):
-        """Bridge for DM/Mention chat."""
-        if message.author.bot:
-            return
-
+        if message.author.bot: return
         content = message.content.strip()
         if self.bot.user in message.mentions:
             mention_strings = [f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"]
             for m in mention_strings:
                 content = content.replace(m, "").strip()
-
-        if not content:
-            return
-
+        if not content: return
         await self.handle_chat_turn(message.channel, message.author, message.channel, content)
 
     @commands.command(aliases=["latency"])
@@ -199,33 +263,26 @@ class ChatCommands(commands.Cog):
             color=discord.Color.blurple()
         )
         embed.add_field(name="LLM Provider", value="`Ollama (Qwen3-Coder)`")
-        embed.add_field(name="Media Engine", value="`Diffusers (FLUX.2)`")
+        embed.add_field(name="HQ Engine", value="`FLUX.2 (Dev-4bit)`")
+        embed.add_field(name="Fast Engine", value="`SDXL (Base-1.0)`")
         await ctx.send(embed=embed)
 
-    @commands.command(aliases=["ask", "talk"])
+    @commands.command(aliases=["ask", "talk", "fact"])
     async def chat(self, ctx, *, message: str):
         await self.handle_chat_turn(ctx, ctx.author, ctx.channel, message)
 
     @commands.command(name="studio")
     async def set_studio_config(self, ctx, setting: str, value: str):
-        """
-        Configures the 3090 Ti Studio Engine.
-        Usage: !studio bpm 140 | !studio voice female | !studio mode lyrics
-        """
         music_service = getattr(self.bot, "music_service", None)
         if not music_service:
             return await ctx.send("❌ Music Service not loaded.")
 
         setting = setting.lower()
         try:
-            if setting == "bpm":
-                music_service.update_studio_settings(bpm=int(value))
-            elif setting == "voice":
-                music_service.update_studio_settings(voice=value)
-            elif setting == "mode":
-                music_service.update_studio_settings(mode=value)
-            else:
-                return await ctx.send("❓ Unknown setting. Use: bpm, voice, or mode.")
+            if setting == "bpm": music_service.update_studio_settings(bpm=int(value))
+            elif setting == "voice": music_service.update_studio_settings(voice=value)
+            elif setting == "mode": music_service.update_studio_settings(mode=value)
+            else: return await ctx.send("❓ Unknown setting. Use: bpm, voice, or mode.")
                 
             embed = discord.Embed(
                 title="🎼 Studio Profile Updated",
@@ -234,7 +291,7 @@ class ChatCommands(commands.Cog):
             )
             await ctx.send(embed=embed)
         except ValueError:
-            await ctx.send("❌ Invalid value. BPM must be a number.")
+            await ctx.send("❌ Invalid value.")
 
 async def setup(bot):
     await bot.add_cog(ChatCommands(bot))
