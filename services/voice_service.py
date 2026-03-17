@@ -26,10 +26,12 @@ class VoiceService:
         self.output_dir = Path(MEDIA_OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # 2026 Hardware Optimization: Using 3090 Ti for Whisper inference
-        self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+        self.stt_model = None  # Lazy-loaded on first use
 
     # --- NEW: 3090 Ti SPEECH TO TEXT ---
     async def speech_to_text(self, audio_path: str) -> str:
+        if self.stt_model is None:
+            self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
         """
         2026 Expansion: Converts user voice to text using local GPU.
         Decoupled from main loop to prevent stream lag.

@@ -1,5 +1,4 @@
 # --- MUST BE AT THE ABSOLUTE TOP ---
-import davey
 import os
 # Force all 33GB+ of AI models to stay on your G: drive project folder
 
@@ -46,7 +45,7 @@ if not discord.opus.is_loaded():
         discord.opus.load_opus(opus_path)
     else:
         # Fallback for hardened Kali paths
-        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+        pass  # Linux path skipped on Windows
 
 # 2026 Voice Engine Bridge
 if not discord.opus.is_loaded():
@@ -55,7 +54,7 @@ if not discord.opus.is_loaded():
         discord.opus.load_opus(opus_path)
     else:
         # Fallback for hardened Kali paths
-        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+        pass  # Linux path skipped on Windows
 
 
 setup_logging()

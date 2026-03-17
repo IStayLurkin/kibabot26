@@ -3,7 +3,8 @@ import torch  # Required for the hardware check
 from dotenv import load_dotenv
 from core.constants import BOT_DEFAULT_PREFIX
 
-load_dotenv()
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
 # --- HARDWARE PREFERENCE DEFINITION (Moved up to fix NameError) ---
 CUDA_PREFERRED = os.getenv("CUDA_PREFERRED", "true").strip().lower() in {"1", "true", "yes", "on"}

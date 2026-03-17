@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import gc
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 import uuid
 import torch
@@ -10,15 +13,10 @@ import aiohttp
 from pathlib import Path
 from typing import Optional
 
-# 2026 Local Foundation Model Imports
 try:
     from diffusers import StableAudioProjectionPipeline
-    # Note: YuE typically utilizes a custom transformer/diffusers hybrid pipeline
-    # We use a placeholder for the specific YuE loader class here
-    from core.model_loaders import YueFoundationModel 
 except ImportError:
     StableAudioProjectionPipeline = None
-    YueFoundationModel = None
 
 from core.config import (
     MUSIC_DEFAULT_QUALITY,
@@ -29,17 +27,25 @@ from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# YuE repo lives on G: drive — WSL path
+YUE_REPO_PATH = "/mnt/g/code/python/learn_python/bot/YuE/inference"
+YUE_STAGE1_MODEL = "m-a-p/YuE-s1-7B-anneal-en-cot"
+YUE_STAGE2_MODEL = "m-a-p/YuE-s2-1B-general"
+
+
 class MusicService:
     def __init__(self, performance_tracker=None) -> None:
         self.performance_tracker = performance_tracker
         self.output_dir = Path(MEDIA_OUTPUT_DIR) / "audio"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.pipeline = None  # Lazy-loaded foundation model
-        self.active_model_type = None # Track what's in VRAM
+        self.pipeline = None
+        self.active_model_type = None
+        self.bpm = 120
+        self.voice_style = "studio"
+        self.vocal_mode = "lyrics"
 
     async def _unload_ollama(self):
-        """Standard 3090 Ti VRAM clearance for heavy foundation models."""
         try:
             logger.debug("Clearing VRAM for Studio Audio Generation...")
             async with aiohttp.ClientSession() as session:
@@ -56,12 +62,9 @@ class MusicService:
             logger.debug("Unload failed: %s", e)
 
     async def generate_melody(self, prompt: str) -> str:
-        """Utilizes Stable Audio Open for high-fidelity loops/melodies."""
         await self._unload_ollama()
-        
         filename = f"melody_{int(time.time())}.wav"
         path = self.output_dir / filename
-
         try:
             return await asyncio.to_thread(self._generate_melody_local, prompt, str(path))
         except Exception as e:
@@ -76,85 +79,131 @@ class MusicService:
         vocal_mode: str,
         lyrics: str = ""
     ) -> str:
-        """Utilizes YuE Foundation Model for human-level studio vocals."""
         await self._unload_ollama()
-        
         filename = f"kiba_studio_{int(time.time())}.mp3"
         path = self.output_dir / filename
-
         prompt = f"{vibe}, {voice_style} vocals, {vocal_mode}, {bpm} BPM. {lyrics}"
-
         try:
             return await asyncio.to_thread(self._generate_yue_studio, prompt, str(path))
         except Exception as e:
             logger.error("YuE Studio generation failed: %s", e)
             return ""
-        
 
     def update_studio_settings(self, bpm: int = None, voice: str = None, mode: str = None):
-            """Updates the local studio configuration for YuE synthesis."""
-            if bpm:
-                self.bpm = max(60, min(200, bpm))
-            if voice:
-                self.voice_style = voice.strip().lower()
-            if mode:
-                self.vocal_mode = mode.strip().lower()
-            
-            logger.debug("Studio Config Updated: %s BPM | %s | %s", self.bpm, self.voice_style, self.vocal_mode)
+        if bpm:
+            self.bpm = max(60, min(200, bpm))
+        if voice:
+            self.voice_style = voice.strip().lower()
+        if mode:
+            self.vocal_mode = mode.strip().lower()
+        logger.debug("Studio Config Updated: %s BPM | %s | %s", self.bpm, self.voice_style, self.vocal_mode)
 
     def _generate_melody_local(self, prompt: str, filepath: str) -> str:
-        """Sync worker for Stable Audio Open."""
+        if StableAudioProjectionPipeline is None:
+            logger.error("StableAudioProjectionPipeline not available. Check diffusers install.")
+            return ""
         if self.active_model_type != "stable-audio":
             self.pipeline = StableAudioProjectionPipeline.from_pretrained(
-                "stabilityai/stable-audio-open-1.0", 
+                "stabilityai/stable-audio-open-1.0",
                 torch_dtype=torch.float16
             )
             self.pipeline.to(self.device)
             self.active_model_type = "stable-audio"
 
-        # Generate 15-second high-quality loop
-        audio = self.pipeline(
-            prompt, 
-            steps=100, 
-            seconds_total=15
-        ).audios[0]
-        
-        # Save logic (assumes standard audio saving utility)
+        audio = self.pipeline(prompt, steps=100, seconds_total=15).audios[0]
         self._save_audio(audio, filepath)
         return filepath
 
     def _generate_yue_studio(self, prompt: str, filepath: str) -> str:
-        """Sync worker for YuE Studio Vocals (VRAM heavy)."""
-        if self.active_model_type != "yue":
-            logger.debug("Loading YuE Foundation Model (32B-Audio)...")
-            # 4-bit quantization is often needed for YuE on 24GB cards
-            self.pipeline = YueFoundationModel.from_pretrained(
-                "m-a-p/YuE-s1-7B-anneal-en-cot",
-                load_in_4bit=True,
-                torch_dtype=torch.bfloat16
-            )
-            # Use Sequential Offloading just like FLUX.2
-            self.pipeline.enable_sequential_cpu_offload()
-            self.active_model_type = "yue"
+        """Calls YuE infer.py via subprocess — actual supported inference method."""
+        if not os.path.exists(YUE_REPO_PATH):
+            logger.error("YuE repo not found at %s — run the clone step first.", YUE_REPO_PATH)
+            return ""
 
-        # YuE generates realistic lyrics-to-singing
-        audio_stream = self.pipeline.generate_full_song(
-            prompt,
-            num_steps=50,
-            guidance_scale=5.0
-        )
-        
-        audio_stream.save(filepath)
-        return filepath
+        # Split prompt into genre tags and lyrics on the period
+        parts = prompt.split(".", 1)
+        genre_text = parts[0].strip() if parts else "pop upbeat female vocal bright"
+        lyrics_text = parts[1].strip() if len(parts) > 1 else prompt
+
+        output_dir = str(self.output_dir / f"yue_{uuid.uuid4().hex}")
+        os.makedirs(output_dir, exist_ok=True)
+
+        genre_file = None
+        lyrics_file = None
+
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as gf:
+                gf.write(genre_text)
+                genre_file = gf.name
+
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as lf:
+                lf.write(lyrics_text)
+                lyrics_file = lf.name
+
+            cmd = [
+                "python", "infer.py",
+                "--cuda_idx", "0",
+                "--stage1_model", YUE_STAGE1_MODEL,
+                "--stage2_model", YUE_STAGE2_MODEL,
+                "--genre_txt", genre_file,
+                "--lyrics_txt", lyrics_file,
+                "--run_n_segments", "2",
+                "--stage2_batch_size", "4",
+                "--output_dir", output_dir,
+                "--max_new_tokens", "3000",
+                "--repetition_penalty", "1.1",
+            ]
+
+            logger.debug("Starting YuE inference — this takes ~6 minutes on 3090 Ti...")
+            result = subprocess.run(
+                cmd,
+                cwd=YUE_REPO_PATH,
+                capture_output=True,
+                text=True,
+                timeout=900
+            )
+
+            if result.returncode != 0:
+                logger.error("YuE infer.py failed:\n%s", result.stderr)
+                return ""
+
+            # Find output file
+            output_files = list(Path(output_dir).glob("**/*.mp3"))
+            if not output_files:
+                output_files = list(Path(output_dir).glob("**/*.wav"))
+            if not output_files:
+                logger.error("YuE ran but produced no output in %s", output_dir)
+                return ""
+
+            shutil.move(str(output_files[0]), filepath)
+            return filepath
+
+        except subprocess.TimeoutExpired:
+            logger.error("YuE timed out after 15 minutes.")
+            return ""
+        except Exception as e:
+            logger.error("YuE subprocess error: %s", e)
+            return ""
+        finally:
+            if genre_file and os.path.exists(genre_file):
+                os.unlink(genre_file)
+            if lyrics_file and os.path.exists(lyrics_file):
+                os.unlink(lyrics_file)
 
     def _save_audio(self, audio_data, filepath: str):
-        """Utility to write raw tensors to wav/mp3."""
         import scipy.io.wavfile as wavfile
         wavfile.write(filepath, 44100, audio_data.cpu().numpy())
 
     def clear_vram(self):
-        """Force ejection of all audio models."""
         self.pipeline = None
         self.active_model_type = None
         torch.cuda.empty_cache()
         gc.collect()
+
+    def _record_duration(self, name: str, started_at: float) -> None:
+        if self.performance_tracker is None:
+            return
+        self.performance_tracker.record_service_call(
+            name,
+            (time.perf_counter() - started_at) * 1000,
+        )

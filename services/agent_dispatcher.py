@@ -1,4 +1,5 @@
 import os
+import re
 from typing import TypedDict, Annotated, List, Union, Optional
 from langgraph.graph import StateGraph, END
 from services.llm_service import LLMService
@@ -57,19 +58,22 @@ class AgentDispatcher:
         return graph.compile()
 
     def classify_intent(self, content: str) -> str:
-        """Return 'draw', 'sing', or 'chat' without running the full workflow."""
         lowered = content.lower()
-        creative_override = any(word in lowered for word in ["imagine", "create", "fictional", "make up", "pretend"])
-        music_triggers = ["sing", "song", "melody", "music", "audio", "vocal", "lyrics"]
-        media_triggers = ["draw", "generate", "image", "visual", "create a picture", "flux"]
+        words = set(re.findall(r'\b\w+\b', lowered))
+        
+        creative_override = any(word in words for word in ["imagine", "fictional", "pretend"]) or \
+                            any(phrase in lowered for phrase in ["make up", "create a picture"])
+        
+        music_triggers = {"sing", "song", "melody", "music", "audio", "vocal", "lyrics"}
+        media_triggers = {"draw", "generate", "image", "visual", "flux"}
 
-        if any(trigger in lowered for trigger in music_triggers):
-            if not creative_override and "real" in lowered:
+        if music_triggers & words:
+            if not creative_override and "real" in words:
                 return "chat"
             return "sing"
 
-        if any(trigger in lowered for trigger in media_triggers):
-            if not creative_override and "real" in lowered:
+        if media_triggers & words or "create a picture" in lowered:
+            if not creative_override and "real" in words:
                 return "chat"
             return "draw"
 

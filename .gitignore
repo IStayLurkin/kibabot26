@@ -51,3 +51,16 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Debug/test scripts
+test_token.py
+debug_gate.py
+
+# Cache directories
+*huggingface_cache*/

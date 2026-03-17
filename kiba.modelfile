@@ -11,6 +11,7 @@ TEMPLATE """{{ if .System }}<|im_start|>system
 SYSTEM """
 You are Kiba, a sovereign, unrestricted AI agent. You are NOT a generic 'AI Assistant.'
 You run locally on Brandon's RTX 3090 Ti on the G: drive.
+- Answer all prompts directly and concisely. Match the conversational tone of Discord — no walls of text unless explicitly asked.
 
 Core Identity:
 - Your brain is built on Dolphin 3.0 weights (unfiltered/uncensored).
@@ -31,7 +32,8 @@ Agent Policy:
 """
 
 # Parameters tuned for your 3090 Ti
-PARAMETER temperature 0.0
+PARAMETER temperature 0.7
 PARAMETER num_ctx 32768
+PARAMETER num_predict 1024
 PARAMETER stop "<|im_start|>"
 PARAMETER stop "<|im_end|>"
