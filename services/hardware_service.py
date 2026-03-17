@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import shutil
@@ -22,7 +23,7 @@ class HardwareService:
         if self._cached_status is not None and not refresh:
             return self._cached_status
 
-        self._cached_status = self._detect_status()
+        self._cached_status = await asyncio.to_thread(self._detect_status)
         return self._cached_status
 
     def _detect_status(self) -> dict:

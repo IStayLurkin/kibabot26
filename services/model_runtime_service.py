@@ -85,9 +85,9 @@ class ModelRuntimeService:
         if self.model_storage_service is not None:
             self.model_storage_service.initialize_storage()
         await self.register_default_models()
-        await self.refresh_hardware_status()
+        hardware = await self.refresh_hardware_status()
         await self.scan_local_storage()
-        await self.sync_models("llm")
+        await self.sync_models("llm", hardware=hardware)
         await self.sync_models("image")
         await self.sync_models("audio")
         await self.load_runtime_settings()
@@ -236,11 +236,11 @@ class ModelRuntimeService:
             logger.debug("[model_discovered] provider=local type=image model=%s", model_name)
             logger.debug("[local_model_detected] provider=local type=image model=%s path=%s", model_name, path)
 
-    async def sync_models(self, model_type: str) -> dict:
+    async def sync_models(self, model_type: str, hardware: dict | None = None) -> dict:
         discovered = []
 
         if model_type == "llm":
-            hardware = await self.hardware_service.get_status(refresh=True)
+            hardware = hardware or await self.hardware_service.get_status(refresh=False)
             if hardware["ollama_available"]:
                 for model_name in hardware["ollama_models"]:
                     await upsert_model(
