@@ -149,6 +149,7 @@ class ExpenseBot(commands.Bot):
         )
         self.music_service = MusicService(
             performance_tracker=self.performance_tracker,
+            runtime_service=self.model_runtime_service,
         )
         self.codegen_service = CodegenService(
             llm_service=self.llm_service,

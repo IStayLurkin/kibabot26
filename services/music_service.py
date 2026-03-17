@@ -36,8 +36,9 @@ YUE_STAGE2_MODEL = "m-a-p/YuE-s2-1B-general"
 
 
 class MusicService:
-    def __init__(self, performance_tracker=None) -> None:
+    def __init__(self, performance_tracker=None, runtime_service=None) -> None:
         self.performance_tracker = performance_tracker
+        self.runtime_service = runtime_service
         self.output_dir = Path(MEDIA_OUTPUT_DIR) / "audio"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -47,16 +48,28 @@ class MusicService:
         self.voice_style = "studio"
         self.vocal_mode = "lyrics"
 
+    def _get_active_ollama_model(self) -> str:
+        """Return the live runtime model name, falling back to config."""
+        if self.runtime_service is not None:
+            try:
+                name = self.runtime_service.get_active_llm_model()
+                if name:
+                    return name
+            except Exception:
+                pass
+        return OLLAMA_MODEL
+
     async def _unload_ollama(self):
+        model_name = self._get_active_ollama_model()
         try:
             logger.debug("Clearing VRAM for Studio Audio Generation...")
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "http://localhost:11434/api/chat",
-                    json={"model": OLLAMA_MODEL, "keep_alive": 0}
+                    json={"model": model_name, "keep_alive": 0}
                 ) as resp:
                     if resp.status == 200:
-                        logger.debug("%s ejected from VRAM.", OLLAMA_MODEL)
+                        logger.debug("%s ejected from VRAM.", model_name)
             await asyncio.sleep(1)
             torch.cuda.empty_cache()
             gc.collect()

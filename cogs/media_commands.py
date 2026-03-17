@@ -36,7 +36,10 @@ class MediaCommands(commands.Cog):
         self.music_service = getattr(
             bot,
             "music_service",
-            MusicService(performance_tracker=performance_tracker),
+            MusicService(
+                performance_tracker=performance_tracker,
+                runtime_service=getattr(bot, "model_runtime_service", None),
+            ),
         )
 
     @commands.command(name="image", aliases=["img"])
