@@ -11,6 +11,7 @@ from typing import Dict, List, Tuple
 
 from openai import OpenAI
 
+from services.circuit_breaker import CircuitBreaker
 from core.config import (
     AGENTIC_CHAT_ENABLED,
     AGENTIC_CHAT_MAX_TOKENS,
@@ -200,6 +201,10 @@ class LLMService:
         self.model_runtime_service = model_runtime_service
         self.behavior_rule_service = behavior_rule_service
         self._client_cache: dict[str, object] = {}
+        self._circuit_breakers = {
+            "ollama": CircuitBreaker(failure_threshold=3, cooldown_seconds=120),
+            "hf": CircuitBreaker(failure_threshold=3, cooldown_seconds=120),
+        }
         self.media_output_dir = Path(MEDIA_OUTPUT_DIR)
         self.media_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -303,13 +308,15 @@ class LLMService:
             active_provider = self.model_runtime_service.get_active_llm_provider()
             self.provider = active_provider
             chain = [active_provider] + [p for p in fallbacks if p != active_provider]
-            return chain
+        else:
+            chains = {
+                "hf": ["hf", "ollama"],
+                "ollama": ["ollama", "hf"],
+            }
+            chain = chains.get(self.provider, fallbacks)
 
-        chains = {
-            "hf": ["hf", "ollama"],
-            "ollama": ["ollama", "hf"],
-        }
-        return chains.get(self.provider, fallbacks)
+        chain = [p for p in chain if self._circuit_breakers.get(p, CircuitBreaker()).is_available()]
+        return chain or ["ollama"]
 
     def _get_model_for_provider(self, provider: str, media_type: str = "llm") -> str:
         if self.model_runtime_service is not None:
@@ -433,6 +440,7 @@ class LLMService:
 
                 content = _extract_message_text(response.choices[0].message)
                 if content and content.strip():
+                    self._circuit_breakers.get(provider, CircuitBreaker()).record_success()
                     return content.strip()
 
                 errors.append(f"{provider}: empty response")
@@ -443,6 +451,7 @@ class LLMService:
                         f"llm.chat_completion.{provider}",
                         (time.perf_counter() - started_at) * 1000,
                     )
+                self._circuit_breakers.get(provider, CircuitBreaker()).record_failure()
                 errors.append(f"{provider}: {type(exc).__name__}: {exc}")
                 continue
 
