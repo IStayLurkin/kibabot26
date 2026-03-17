@@ -50,7 +50,7 @@ class ModelStorageService:
         if provider == "ollama":
             return self._ollama_manifest_path(model_name).exists()
 
-        if provider in {"openai", "hf", "automatic1111", "comfyui"}:
+        if provider in {"hf", "automatic1111", "comfyui"}:
             return True
 
         return False
@@ -69,7 +69,7 @@ class ModelStorageService:
                 "Place the model artifact there first."
             )
 
-        if provider in {"openai", "hf", "automatic1111", "comfyui"}:
+        if provider in {"hf", "automatic1111", "comfyui"}:
             return True, f"Provider `{provider}` does not require a local pull step for `{model_name}`."
 
         return False, f"Provider `{provider}` does not support pull/install yet."

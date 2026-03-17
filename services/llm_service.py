@@ -38,16 +38,6 @@ from core.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_REQUEST_TIMEOUT_SECONDS,
-    OPENAI_API_KEY,
-    OPENAI_IMAGE_MODEL,
-    OPENAI_IMAGE_QUALITY,
-    OPENAI_IMAGE_SIZE,
-    OPENAI_MODEL,
-    OPENAI_TTS_MODEL,
-    OPENAI_TTS_VOICE,
-    OPENAI_VIDEO_MODEL,
-    OPENAI_VIDEO_SECONDS,
-    OPENAI_VIDEO_SIZE,
     VOICE_PROVIDER,
 )
 from core.logging_config import get_logger
@@ -205,7 +195,7 @@ class LLMService:
         self.performance_tracker = performance_tracker
         self.model_runtime_service = model_runtime_service
         self.behavior_rule_service = behavior_rule_service
-        self._client_cache: dict[str, OpenAI] = {}
+        self._client_cache: dict[str, object] = {}
         self.media_output_dir = Path(MEDIA_OUTPUT_DIR)
         self.media_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -271,9 +261,6 @@ class LLMService:
         updated.insert(1, {"role": "system", "content": rules_block})
         return updated
 
-    def _openai_client(self) -> OpenAI:
-        return OpenAI(api_key=OPENAI_API_KEY)
-
     def _ollama_client(self) -> OpenAI:
         return OpenAI(
             base_url=OLLAMA_BASE_URL,
@@ -293,7 +280,7 @@ class LLMService:
             return cached
 
         if provider == "openai":
-            client = self._openai_client()
+            raise RuntimeError("OpenAI provider is disabled.")
         elif provider == "ollama":
             client = self._ollama_client()
         elif provider == "hf":
@@ -307,7 +294,7 @@ class LLMService:
         return client
 
     def _build_provider_chain(self) -> List[str]:
-        fallbacks = ["ollama", "openai", "hf"]
+        fallbacks = ["ollama", "hf"]
         if self.model_runtime_service is not None:
             active_provider = self.model_runtime_service.get_active_llm_provider()
             self.provider = active_provider
@@ -315,9 +302,8 @@ class LLMService:
             return chain
 
         chains = {
-            "openai": ["openai", "ollama", "hf"],
-            "hf": ["hf", "ollama", "openai"],
-            "ollama": ["ollama", "openai", "hf"],
+            "hf": ["hf", "ollama"],
+            "ollama": ["ollama", "hf"],
         }
         return chains.get(self.provider, fallbacks)
 
@@ -327,19 +313,19 @@ class LLMService:
                 return self.model_runtime_service.get_active_image_model()
             if media_type == "voice":
                 return self.model_runtime_service.get_active_audio_model()
-            return self.model_runtime_service.get_active_llm_model()
+            active_provider = self.model_runtime_service.get_active_llm_provider()
+            if provider == active_provider:
+                return self.model_runtime_service.get_active_llm_model()
 
         if media_type == "image":
-            return OPENAI_IMAGE_MODEL
+            return ""
         if media_type == "voice":
-            return OPENAI_TTS_MODEL
-        if provider == "openai":
-            return OPENAI_MODEL
+            return ""
         if provider == "ollama":
-            return "kiba" # Local 3090 Ti default
+            return OLLAMA_MODEL
         if provider == "hf":
             return HF_MODEL
-        return OPENAI_MODEL
+        return OLLAMA_MODEL
 
     def _extract_usage(self, parsed_response) -> dict[str, int]:
         usage = getattr(parsed_response, "usage", None)
@@ -352,42 +338,8 @@ class LLMService:
             "total_tokens": getattr(usage, "total_tokens", None) or 0,
         }
 
-    def _extract_rate_limits(self, headers) -> dict[str, str]:
-        if not headers:
-            return {}
-
-        mapping = {
-            "requests_limit": headers.get("x-ratelimit-limit-requests", ""),
-            "requests_remaining": headers.get("x-ratelimit-remaining-requests", ""),
-            "requests_reset": headers.get("x-ratelimit-reset-requests", ""),
-            "tokens_limit": headers.get("x-ratelimit-limit-tokens", ""),
-            "tokens_remaining": headers.get("x-ratelimit-remaining-tokens", ""),
-            "tokens_reset": headers.get("x-ratelimit-reset-tokens", ""),
-        }
-        return {key: value for key, value in mapping.items() if value}
-
-    def _record_openai_metrics(self, parsed_response=None, headers=None):
-        if self.model_runtime_service is None:
-            return
-
-        usage = self._extract_usage(parsed_response) if parsed_response is not None else {}
-        rate_limits = self._extract_rate_limits(headers)
-        if usage or rate_limits:
-            self.model_runtime_service.record_openai_metrics(usage=usage, rate_limits=rate_limits)
-
     def _create_chat_completion(self, provider: str, *, model: str, messages: List[dict], temperature: float, max_tokens: int):
         client = self._get_client_for_provider(provider)
-        if provider == "openai":
-            raw_response = client.chat.completions.with_raw_response.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            parsed_response = raw_response.parse()
-            self._record_openai_metrics(parsed_response, raw_response.headers)
-            return parsed_response
-
         return client.chat.completions.create(
             model=model,
             messages=messages,
@@ -949,38 +901,7 @@ class LLMService:
             provider = self.model_runtime_service.get_active_image_provider()
 
         if provider == "openai":
-            client = self._get_client_for_provider("openai")
-            try:
-                raw_response = client.images.with_raw_response.generate(
-                    model=self._get_model_for_provider("openai", "image"),
-                    prompt=prompt,
-                    size=OPENAI_IMAGE_SIZE,
-                    quality=OPENAI_IMAGE_QUALITY,
-                    output_format="png",
-                )
-                response = raw_response.parse()
-                self._record_openai_metrics(response, raw_response.headers)
-            except Exception as exc:
-                raise RuntimeError(f"Image generation failed via openai: {exc}") from exc
-
-            data = getattr(response, "data", None)
-            if not data:
-                raise RuntimeError("Image generation returned no data.")
-
-            first = data[0]
-            b64_json = getattr(first, "b64_json", None)
-            if b64_json:
-                return {"b64_json": b64_json}
-
-            image_base64 = getattr(first, "image_base64", None)
-            if image_base64:
-                return {"image_base64": image_base64}
-
-            url = getattr(first, "url", None)
-            if url:
-                return {"url": url}
-
-            raise RuntimeError("Unsupported OpenAI image response format.")
+            raise RuntimeError("OpenAI image generation is disabled.")
 
         if provider in {"automatic1111", "local"}:
             backend = provider
@@ -1126,34 +1047,7 @@ class LLMService:
                 )
 
     def _generate_video_sync(self, prompt: str) -> dict:
-        client = self._get_client_for_provider("openai")
-        try:
-            raw_response = client.videos.with_raw_response.create(
-                model=OPENAI_VIDEO_MODEL,
-                prompt=prompt,
-                seconds=OPENAI_VIDEO_SECONDS,
-                size=OPENAI_VIDEO_SIZE,
-            )
-            created_video = raw_response.parse()
-            self._record_openai_metrics(created_video, raw_response.headers)
-            video = client.videos.poll(created_video.id)
-        except Exception as exc:
-            raise RuntimeError(f"Video generation failed via openai: {exc}") from exc
-
-        if getattr(video, "status", "") != "completed":
-            last_error = getattr(video, "last_error", None)
-            raise RuntimeError(f"Video generation did not complete successfully. Status: {getattr(video, 'status', 'unknown')} | Error: {last_error}")
-
-        try:
-            content = client.videos.download_content(video.id)
-            video_bytes = content.read()
-        except Exception as exc:
-            raise RuntimeError(f"Video content download failed: {exc}") from exc
-
-        filename = f"video_{uuid.uuid4().hex}.mp4"
-        path = self.media_output_dir / filename
-        path.write_bytes(video_bytes)
-        return {"file_path": str(path)}
+        raise RuntimeError("Video generation via OpenAI is disabled.")
 
     async def text_to_speech(self, text: str) -> bytes:
         started_at = time.perf_counter()
@@ -1167,30 +1061,4 @@ class LLMService:
                 )
 
     def _text_to_speech_sync(self, text: str) -> bytes:
-        provider = VOICE_PROVIDER
-        if self.model_runtime_service is not None:
-            provider = self.model_runtime_service.get_active_audio_provider()
-        if provider != "openai":
-            raise RuntimeError(f"Voice generation via {provider} is not wired in this build.")
-
-        client = self._get_client_for_provider("openai")
-
-        try:
-            response = client.audio.speech.create(
-                model=self._get_model_for_provider("openai", "voice"),
-                voice=OPENAI_TTS_VOICE,
-                input=text,
-            )
-        except Exception as exc:
-            raise RuntimeError(f"TTS failed via {provider}: {exc}") from exc
-
-        if hasattr(response, "read"):
-            return response.read()
-
-        if hasattr(response, "content") and isinstance(response.content, bytes):
-            return response.content
-
-        if isinstance(response, bytes):
-            return response
-
-        raise RuntimeError("Unsupported TTS response format.")
+        raise RuntimeError("OpenAI TTS is disabled. Configure a local TTS provider.")

@@ -48,9 +48,6 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "220"))
 AGENTIC_CHAT_ENABLED = os.getenv("AGENTIC_CHAT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 AGENTIC_CHAT_MAX_TOKENS = int(os.getenv("AGENTIC_CHAT_MAX_TOKENS", "500"))
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "dolphin-llama3:latest")
@@ -89,16 +86,6 @@ MAX_CODE_REQUEST_LENGTH = int(os.getenv("MAX_CODE_REQUEST_LENGTH", "4000"))
 
 AGENT_DEFAULT_COOLDOWN_SECONDS = int(os.getenv("AGENT_DEFAULT_COOLDOWN_SECONDS", "8"))
 AGENT_MAX_CONTEXT_MESSAGES = int(os.getenv("AGENT_MAX_CONTEXT_MESSAGES", "15"))
-
-OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
-OPENAI_IMAGE_SIZE = os.getenv("OPENAI_IMAGE_SIZE", "1024x1024")
-OPENAI_IMAGE_QUALITY = os.getenv("OPENAI_IMAGE_QUALITY", "medium")
-OPENAI_IMAGE_FORMAT = os.getenv("OPENAI_IMAGE_FORMAT", "png")
-OPENAI_VIDEO_MODEL = os.getenv("OPENAI_VIDEO_MODEL", "sora-2")
-OPENAI_VIDEO_SIZE = os.getenv("OPENAI_VIDEO_SIZE", "720x1280")
-OPENAI_VIDEO_SECONDS = int(os.getenv("OPENAI_VIDEO_SECONDS", "4"))
-OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
-OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "alloy")
 
 AUTOMATIC1111_BASE_URL = os.getenv("AUTOMATIC1111_BASE_URL", "").strip()
 AUTOMATIC1111_DEFAULT_MODEL = os.getenv("AUTOMATIC1111_DEFAULT_MODEL", "automatic1111").strip()

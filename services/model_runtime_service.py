@@ -18,9 +18,6 @@ from core.config import (
     MODEL_STORAGE_ROOT,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
-    OPENAI_IMAGE_MODEL,
-    OPENAI_MODEL,
-    OPENAI_TTS_MODEL,
     PREFERRED_LOCAL_IMAGE_BACKEND,
 )
 from core.logging_config import get_logger
@@ -41,7 +38,7 @@ LLM_DIR = LOCAL_MODEL_STORAGE_DIR / "llm"
 IMAGE_DIR = LOCAL_MODEL_STORAGE_DIR / "image"
 IMAGE_HINTS = ("sd", "sdxl", "flux", "stable-diffusion")
 LOCAL_IMAGE_PROVIDERS = {"local", "ollama", "automatic1111", "comfyui"}
-REMOTE_PROVIDERS = {"openai", "hf"}
+REMOTE_PROVIDERS = {"hf"}
 
 
 @dataclass(slots=True)
@@ -70,9 +67,9 @@ class ModelRuntimeService:
             active_llm_provider=DEFAULT_MODEL_PROVIDER or LLM_PROVIDER,
             active_llm_model=self._default_llm_model_for_provider(DEFAULT_MODEL_PROVIDER or LLM_PROVIDER),
             active_image_provider=DEFAULT_IMAGE_MODEL_PROVIDER or IMAGE_PROVIDER,
-            active_image_model=OPENAI_IMAGE_MODEL,
-            active_audio_provider="openai",
-            active_audio_model=OPENAI_TTS_MODEL,
+            active_image_model="",
+            active_audio_provider="local",
+            active_audio_model="",
             preferred_compute_device="cuda" if CUDA_PREFERRED else "cpu",
             cuda_preferred=CUDA_PREFERRED,
             cuda_enabled=False,
@@ -81,8 +78,6 @@ class ModelRuntimeService:
             active_device="Remote",
             provider_status={},
         )
-        self.last_openai_usage: dict[str, str | int] = {}
-        self.last_openai_rate_limits: dict[str, str] = {}
         self.last_runtime_topic = ""
         self.last_runtime_reason = ""
 
@@ -99,9 +94,6 @@ class ModelRuntimeService:
 
     async def register_default_models(self):
         defaults = [
-            ("openai", OPENAI_MODEL, "llm", "default", None, ["chat", "code"], "openai", ""),
-            ("openai", OPENAI_IMAGE_MODEL, "image", "default", None, ["image"], "openai", ""),
-            ("openai", OPENAI_TTS_MODEL, "audio", "default", None, ["audio", "tts"], "openai", ""),
             ("ollama", OLLAMA_MODEL, "llm", "default", None, ["chat", "code"], "ollama", "cuda"),
             ("hf", HF_MODEL, "llm", "default", None, ["chat", "code"], "hf", ""),
         ]
@@ -163,7 +155,6 @@ class ModelRuntimeService:
             "ollama": bool(hardware["ollama_available"]),
             "automatic1111": bool(hardware.get("automatic1111_available")),
             "comfyui": bool(hardware.get("comfyui_available")),
-            "openai": True,
             "hf": True,
             "local": self.state.cuda_enabled,
         }
@@ -288,18 +279,6 @@ class ModelRuntimeService:
                     logger.debug("[ollama_model_discovered] provider=ollama model=%s", model["model_name"])
                     discovered.append(f"ollama:{model['model_name']}")
 
-            await upsert_model(
-                "openai",
-                OPENAI_IMAGE_MODEL,
-                "image",
-                source="default",
-                enabled=True,
-                capabilities=["image"],
-                backend="openai",
-                preferred_device="",
-                update_last_synced=True,
-            )
-
             if AUTOMATIC1111_BASE_URL:
                 await upsert_model(
                     "automatic1111",
@@ -327,19 +306,6 @@ class ModelRuntimeService:
                     update_last_synced=True,
                 )
                 discovered.append(f"comfyui:{COMFYUI_DEFAULT_MODEL}")
-
-        if model_type == "audio":
-            await upsert_model(
-                "openai",
-                OPENAI_TTS_MODEL,
-                "audio",
-                source="default",
-                enabled=True,
-                capabilities=["audio", "tts"],
-                backend="openai",
-                preferred_device="",
-                update_last_synced=True,
-            )
 
         return {"model_type": model_type, "discovered": discovered, "count": len(discovered)}
 
@@ -491,10 +457,6 @@ class ModelRuntimeService:
                 f"Active LLM provider: {self.state.active_llm_provider}",
                 f"Model: {self.state.active_llm_model}",
             ]
-            usage_text = self.get_openai_usage_text()
-            if self.state.active_llm_provider == "openai" and usage_text:
-                lines.append("")
-                lines.append(usage_text)
             return "\n".join(lines)
 
         if model_type == "image":
@@ -502,10 +464,6 @@ class ModelRuntimeService:
                 f"Active image provider: {self.state.active_image_provider}",
                 f"Model: {self.state.active_image_model}",
             ]
-            rate_text = self.get_openai_rate_limit_text()
-            if self.state.active_image_provider == "openai" and rate_text:
-                lines.append("")
-                lines.append(rate_text)
             return "\n".join(lines)
 
         lines = [
@@ -544,7 +502,6 @@ class ModelRuntimeService:
             "ollama": bool(hardware["ollama_available"]),
             "automatic1111": bool(hardware.get("automatic1111_available")),
             "comfyui": bool(hardware.get("comfyui_available")),
-            "openai": True,
             "hf": True,
             "local": self.state.cuda_enabled,
         }
@@ -629,12 +586,6 @@ class ModelRuntimeService:
             "how do i fix it",
         } and self.last_runtime_topic == "ollama_available":
             return self.get_ollama_fix_text()
-        if "token usage" in lowered or "rate limit" in lowered:
-            details = [self.get_openai_usage_text(), self.get_openai_rate_limit_text()]
-            rendered = "\n".join(part for part in details if part)
-            self.last_runtime_topic = "openai_limits"
-            self.last_runtime_reason = "This is the latest OpenAI usage and rate-limit information captured from recent API responses." if rendered else "No recent OpenAI usage or rate-limit data has been captured yet."
-            return rendered or "I don't have recent OpenAI usage or rate-limit data yet."
         return None
 
     def get_last_runtime_reason(self) -> str:
@@ -685,49 +636,8 @@ class ModelRuntimeService:
         self.last_runtime_reason = f"The active LLM runtime was switched to ollama:{chosen_model['model_name']}."
         return message
 
-    def record_openai_metrics(self, *, usage: dict[str, int] | None = None, rate_limits: dict[str, str] | None = None):
-        if usage:
-            self.last_openai_usage = {key: value for key, value in usage.items() if value is not None}
-        if rate_limits:
-            self.last_openai_rate_limits = {key: value for key, value in rate_limits.items() if value}
-
-    def get_openai_usage_text(self) -> str:
-        if not self.last_openai_usage:
-            return ""
-
-        input_tokens = self.last_openai_usage.get("input_tokens", 0)
-        output_tokens = self.last_openai_usage.get("output_tokens", 0)
-        total_tokens = self.last_openai_usage.get("total_tokens", 0)
-        return (
-            "Last OpenAI usage:\n"
-            f"Input tokens: {input_tokens}\n"
-            f"Output tokens: {output_tokens}\n"
-            f"Total tokens: {total_tokens}"
-        )
-
-    def get_openai_rate_limit_text(self) -> str:
-        if not self.last_openai_rate_limits:
-            return ""
-
-        lines = ["Last OpenAI rate-limit snapshot:"]
-        for key in (
-            "requests_limit",
-            "requests_remaining",
-            "requests_reset",
-            "tokens_limit",
-            "tokens_remaining",
-            "tokens_reset",
-        ):
-            value = self.last_openai_rate_limits.get(key, "")
-            if value:
-                lines.append(f"{key.replace('_', ' ').title()}: {value}")
-        return "\n".join(lines)
-
     def get_runtime_snapshot(self) -> dict:
-        snapshot = asdict(self.state)
-        snapshot["last_openai_usage"] = self.last_openai_usage
-        snapshot["last_openai_rate_limits"] = self.last_openai_rate_limits
-        return snapshot
+        return asdict(self.state)
 
     def get_active_llm_provider(self) -> str:
         return self.state.active_llm_provider
@@ -765,5 +675,5 @@ class ModelRuntimeService:
         return any(provider in LOCAL_IMAGE_PROVIDERS for provider in (self.state.active_llm_provider, self.state.active_image_provider))
 
     def _default_llm_model_for_provider(self, provider: str) -> str:
-        mapping = {"openai": OPENAI_MODEL, "ollama": OLLAMA_MODEL, "hf": HF_MODEL}
-        return mapping.get(provider, OPENAI_MODEL)
+        mapping = {"ollama": OLLAMA_MODEL, "hf": HF_MODEL}
+        return mapping.get(provider, OLLAMA_MODEL)
