@@ -12,7 +12,7 @@ class CircuitBreaker:
         if self._opened_at is None:
             return True
         elapsed = time.monotonic() - self._opened_at
-        if elapsed > self._cooldown_seconds:
+        if elapsed >= self._cooldown_seconds:
             self._failure_count = 0
             self._opened_at = None
             return True
