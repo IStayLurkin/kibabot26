@@ -17,7 +17,7 @@ Quick reference for Claude. Point Claude here instead of crawling the repo.
 ## core/
 | File | Purpose |
 |------|---------|
-| `config.py` | All env vars — `LLM_PROVIDER`, `OLLAMA_*`, `HF_*`, feature flags. `override=True` on `load_dotenv()` prevents stale Windows env vars from winning. |
+| `config.py` | All env vars — `LLM_PROVIDER`, `OLLAMA_*`, `HF_*`, feature flags. `override=True` on `load_dotenv()` prevents stale Windows env vars from winning. Validates `DEFAULT_MODEL_PROVIDER` is in `ENABLED_MODEL_PROVIDERS` at import. Warns if both `CODE_ALLOWED_USER_IDS` and `CODE_ALLOWED_ROLE_IDS` are empty. |
 | `constants.py` | Static constants — cooldowns, chat limits, version. `CHAT_RECENT_MESSAGE_LIMIT=8`, `CHAT_SUMMARY_MIN_MESSAGES=10`. |
 | `executors.py` | Thread pool executors — `HEAVY_EXECUTOR` (max 2, for image/music/STT), `LIGHT_EXECUTOR` (max 4, for short ops). Import from here, never use `asyncio.to_thread` for heavy jobs. |
 | `feature_flags.py` | Runtime feature toggles |
@@ -35,12 +35,12 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `chat_commands.py` | `!chat`, `!ask`, `!status`, `!hardware`, `!boost`, `!draw`, `!fast`, `!dossier`, `!studio`, `!ping`, `!about`, `!forget`, `!purge`, `!models`, `!allow`, `!deny` | Main AI chat entry point. `handle_natural_chat` → `handle_chat_turn`. Streaming-style reply delivery for long responses. |
 | `agent_commands.py` | Agentic task commands | — |
 | `media_commands.py` | Image/video/audio generation commands | — |
-| `code_commands.py` | Code execution commands | — |
-| `runtime_commands.py` | `!model`, `!hardware`, runtime switching | — |
+| `code_commands.py` | Code execution commands. `!code run` has a 3/60s per-user cooldown. `!code read` truncation uses `CODE_MAX_OUTPUT_CHARS` from config. | — |
+| `runtime_commands.py` | `!model`, `!imagemodel`, `!audiomodel` groups + `!cuda`/`!gpu`, `!commands`, `!help`, `!rule` group. No duplicate `switch` subcommands. | — |
 | `dev_commands.py` | Developer/debug commands | — |
 | `budget_commands.py` | Budget tracking | — |
 | `expense_commands.py` | Expense tracking | — |
-| `error_handler.py` | Global error handler cog | — |
+| `error_handler.py` | Global error handler cog. Handles: `CommandNotFound`, `MissingRequiredArgument`, `BadArgument`, `CommandOnCooldown` (with retry seconds), `NotOwner`, `CheckFailure`, `MissingPermissions`. | — |
 
 ### Key Commands Reference
 | Command | Who | What |
@@ -77,14 +77,14 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `voice_service.py` | Piper TTS + Faster-Whisper STT. Whisper lazy-loaded, auto-unloads after 5min idle. | STT uses `HEAVY_EXECUTOR`. |
 | `video_service.py` | Video generation stub (disabled) | — |
 | `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject uses `OLLAMA_MODEL` from config (not hardcoded). |
-| `memory_service.py` | Short/long-term memory read/write | — |
+| `memory_service.py` | Short/long-term memory read/write. Memory values >20 words are skipped (logged at DEBUG). `blocked_memory_keys` prevents budget/finance keys from being stored. | — |
 | `summary_service.py` | Conversation summarization. Summaries capped at 1500 chars before storage. Triggers after `CHAT_SUMMARY_MIN_MESSAGES=10`. | — |
 | `codegen_service.py` | Code generation | — |
-| `code_execution_service.py` | Sandboxed code execution | — |
+| `code_execution_service.py` | Sandboxed code execution. `DANGEROUS_PATTERNS` lowercased at definition — includes `requests`, `pickle.loads/load`, `eval`, `exec`, `subprocess`, etc. Uses full path in subprocess command. | — |
 | `osint_service.py` | OSINT wrapper — WHOIS, DNS, SSL | — |
-| `behavior_rule_service.py` | Persistent behavior rules | — |
+| `behavior_rule_service.py` | Persistent behavior rules. `extract_rule_replacement` safely guards the `" to "` split — returns `("", "")` if delimiter not present. | — |
 | `performance_service.py` | Perf tracking / latency metrics | — |
-| `tool_router.py` | Routes tool-use requests | — |
+| `tool_router.py` | Routes tool-use requests. `detect_tool` correctly skips image detection for non-media requests. Clarifying question threshold is ≤2 words. Code markers are language-specific (`python`, `def `, `function(`, etc.) — not generic words like `class`/`bug`. | — |
 | `time_service.py` | Datetime context for prompts | — |
 | `command_help_service.py` | Dynamic help text | — |
 | `song_session_service.py` | Music session state | — |
