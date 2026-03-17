@@ -194,6 +194,8 @@ class ExpenseBot(commands.Bot):
     async def close(self):
         logger.info("Shutting down background tasks...")
         self.task_manager.stop_all()
+        from database.db_connection import close_db
+        await close_db()
         await super().close()
 
     def print_startup_banner(self):
