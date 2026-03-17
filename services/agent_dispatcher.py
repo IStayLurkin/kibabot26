@@ -22,9 +22,9 @@ class AgentState(TypedDict):
 class AgentDispatcher:
     def __init__(self, bot):
         self.bot = bot
-        self.llm = getattr(bot, "llm_service", LLMService())
-        self.image_gen = getattr(bot, "image_service", ImageService())
-        self.music_gen = getattr(bot, "music_service", MusicService())
+        self.llm = getattr(bot, "llm_service", None) or LLMService()
+        self.image_gen = getattr(bot, "image_service", None) or ImageService()
+        self.music_gen = getattr(bot, "music_service", None) or MusicService()
         self.workflow = self._create_workflow()
 
     def _create_workflow(self):

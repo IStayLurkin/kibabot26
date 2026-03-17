@@ -42,13 +42,13 @@ BOT_TIMEZONE = os.getenv("BOT_TIMEZONE", "America/Los_Angeles")
 
 PREFERRED_LOCAL_IMAGE_BACKEND = os.getenv("PREFERRED_LOCAL_IMAGE_BACKEND", "automatic1111").strip().lower()
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.8"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "220"))
 AGENTIC_CHAT_ENABLED = os.getenv("AGENTIC_CHAT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 AGENTIC_CHAT_MAX_TOKENS = int(os.getenv("AGENTIC_CHAT_MAX_TOKENS", "500"))
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "dolphin-llama3:latest")
 OLLAMA_CLI_PATH = os.getenv("OLLAMA_CLI_PATH", "").strip()
@@ -70,7 +70,7 @@ SAFE_OSINT_ONLY = os.getenv("SAFE_OSINT_ONLY", "true").strip().lower() in {"1", 
 MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "G:/code/python/learn_python/bot/discord_bot_things/generated_media")
 MODEL_STORAGE_ROOT = os.getenv("MODEL_STORAGE_ROOT", "G:/huggingface_cache")
 MODEL_PULL_TIMEOUT_SECONDS = int(os.getenv("MODEL_PULL_TIMEOUT_SECONDS", "1800"))
-ENABLED_MODEL_PROVIDERS = _parse_str_list(os.getenv("ENABLED_MODEL_PROVIDERS", "openai,ollama,local,hf,automatic1111,comfyui"))
+ENABLED_MODEL_PROVIDERS = _parse_str_list(os.getenv("ENABLED_MODEL_PROVIDERS", "ollama,local,hf,automatic1111,comfyui"))
 DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", LLM_PROVIDER).strip().lower()
 
 CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "G:/code/python/learn_python/bot/discord_bot_things/code_workspace")

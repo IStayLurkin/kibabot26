@@ -1,4 +1,3 @@
-import os, json, time
 import os
 import asyncio
 import time
@@ -9,7 +8,6 @@ import subprocess
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from bot import send_long_message
-import os
 from discord.ext import commands
 
 from core.constants import (
@@ -26,7 +24,6 @@ from services.agent_dispatcher import AgentDispatcher
 from services.chat_service import generate_dynamic_reply
 from services.summary_service import maybe_update_summary
 from core.logging_config import get_logger
-from bot import send_long_message
 
 logger = get_logger(__name__)
 
@@ -135,6 +132,11 @@ class ChatCommands(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Could not retrieve GPU stats: {e}")
 
+    def _get_vram_usage(self) -> int:
+        if self.hardware_service:
+            return self.hardware_service.get_vram_usage_mb()
+        return 0
+
     @commands.command(name="boost")
     async def turbo_mode(self, ctx):
         """Manually clears GPU cache and system garbage collection."""
@@ -143,7 +145,7 @@ class ChatCommands(commands.Cog):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
-            
+
         final_vram = self._get_vram_usage()
         freed = initial_vram - final_vram
         embed = discord.Embed(
@@ -163,7 +165,7 @@ class ChatCommands(commands.Cog):
 
         async with ctx.typing():
             report = await osint_svc.run_dossier(target)
-            await send_chunked(ctx, report)
+            await send_long_message(ctx, report)
 
     # --- IMAGE GENERATION COMMANDS ---
 

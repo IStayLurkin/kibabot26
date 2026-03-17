@@ -10,7 +10,7 @@ OSINT_DISCORD_BOT_TOKEN = os.getenv("OSINT_DISCORD_BOT_TOKEN")
 OSINT_BOT_PREFIX = os.getenv("OSINT_BOT_PREFIX", "!")
 OSINT_LLM_PROVIDER = os.getenv("OSINT_LLM_PROVIDER", "ollama").strip().lower()
 
-OSINT_OLLAMA_BASE_URL = os.getenv("OSINT_OLLAMA_BASE_URL", "http://localhost:11434/v1")
+OSINT_OLLAMA_BASE_URL = os.getenv("OSINT_OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 OSINT_OLLAMA_API_KEY = os.getenv("OSINT_OLLAMA_API_KEY", "ollama")
 OSINT_OLLAMA_MODEL = os.getenv("OSINT_OLLAMA_MODEL", "qwen3:8b")
 

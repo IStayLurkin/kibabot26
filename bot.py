@@ -3,7 +3,7 @@ import os
 # Force all 33GB+ of AI models to stay on your G: drive project folder
 
 # Redirection for Ollama (Qwen3) - Ensures the bot knows where the engine sits
-os.environ['OLLAMA_MODELS'] = '/mnt/g/ollamamodels'
+os.environ['OLLAMA_MODELS'] = 'G:/ollamamodels'
 # ----------------------------------
 # ----------------------------------
 
@@ -46,16 +46,6 @@ if not discord.opus.is_loaded():
     else:
         # Fallback for hardened Kali paths
         pass  # Linux path skipped on Windows
-
-# 2026 Voice Engine Bridge
-if not discord.opus.is_loaded():
-    opus_path = ctypes.util.find_library('opus')
-    if opus_path:
-        discord.opus.load_opus(opus_path)
-    else:
-        # Fallback for hardened Kali paths
-        pass  # Linux path skipped on Windows
-
 
 setup_logging()
 logger = get_logger(__name__)

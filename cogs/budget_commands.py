@@ -1,5 +1,3 @@
-import os, json, time
-import os
 from datetime import datetime
 import discord
 from discord.ext import commands

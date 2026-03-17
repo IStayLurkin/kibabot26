@@ -27,8 +27,8 @@ from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# YuE repo lives on G: drive — WSL path
-YUE_REPO_PATH = "/mnt/g/code/python/learn_python/bot/YuE/inference"
+# YuE repo lives on G: drive
+YUE_REPO_PATH = "G:/code/python/learn_python/bot/YuE/inference"
 YUE_STAGE1_MODEL = "m-a-p/YuE-s1-7B-anneal-en-cot"
 YUE_STAGE2_MODEL = "m-a-p/YuE-s2-1B-general"
 
