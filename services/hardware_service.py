@@ -180,6 +180,20 @@ class HardwareService:
             logger.debug("VRAM usage query failed: %s", exc)
         return 0
 
+    def get_ollama_running_models(self) -> list[dict]:
+        """Returns models currently loaded in Ollama VRAM via /api/ps. Returns [] on failure."""
+        parsed = urlparse(OLLAMA_BASE_URL)
+        base = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else "http://localhost:11434"
+        url = f"{base}/api/ps"
+        request = urllib.request.Request(url, headers={"User-Agent": "KibaBot/1.0"})
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+                return payload.get("models", [])
+        except Exception as exc:
+            logger.debug("Ollama /api/ps failed: %s", exc)
+            return []
+
     def _detect_simple_json_endpoint(self, base_url: str, path: str) -> bool:
         base_url = base_url.strip()
         if not base_url:
