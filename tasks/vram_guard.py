@@ -10,8 +10,9 @@ class VRAMGuard(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.hardware_service = getattr(bot, "hardware_service", None)
-        # Threshold set to 21GB. If idle VRAM exceeds this, we flush.
-        self.vram_threshold_mb = 21504
+        # Threshold set to 16GB. Triggers early enough to leave headroom for model swaps.
+        # (Whisper ~150MB + Ollama ~6GB + OS overhead = guard needs to fire well before 24GB)
+        self.vram_threshold_mb = 16384
         self.guard_loop.start()
 
     def cog_unload(self):

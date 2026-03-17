@@ -27,6 +27,9 @@ class VoiceService:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # 2026 Hardware Optimization: Using 3090 Ti for Whisper inference
         self.stt_model = None  # Lazy-loaded on first use
+        self._stt_last_used: float = 0.0
+        self._stt_unload_task = None
+        self._STT_IDLE_SECONDS = 300  # Unload Whisper after 5 min idle
 
     # --- NEW: 3090 Ti SPEECH TO TEXT ---
     async def speech_to_text(self, audio_path: str) -> str:
@@ -37,12 +40,17 @@ class VoiceService:
         if self.stt_model is None:
             self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
         started_at = time.perf_counter()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         def transcribe():
-            segments, info = self.stt_model.transcribe(audio_path, beam_size=5)
+            segments, _info = self.stt_model.transcribe(audio_path, beam_size=5)
             return " ".join([s.text for s in segments])
-        
-        result = await loop.run_in_executor(None, transcribe)
+
+        from core.executors import HEAVY_EXECUTOR
+        result = await loop.run_in_executor(HEAVY_EXECUTOR, transcribe)
+        self._stt_last_used = time.time()
+        if self._stt_unload_task:
+            self._stt_unload_task.cancel()
+        self._stt_unload_task = asyncio.create_task(self._stt_inactivity_monitor())
         self._record_duration("voice.speech_to_text", started_at)
         return result
 
@@ -177,6 +185,17 @@ class VoiceService:
             wav_file.writeframes(bytes(frames))
 
         return str(path)
+
+    async def _stt_inactivity_monitor(self):
+        """Unloads the Whisper model after idle for _STT_IDLE_SECONDS."""
+        await asyncio.sleep(self._STT_IDLE_SECONDS)
+        if self.stt_model is not None:
+            import torch, gc
+            self.stt_model = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.debug("[VoiceService] Whisper unloaded after %ss idle.", self._STT_IDLE_SECONDS)
 
     def _record_duration(self, name: str, started_at: float) -> None:
         if self.performance_tracker is None:

@@ -32,6 +32,8 @@ async def maybe_update_summary(llm, user_id: str, channel_id: str, session_id: i
             behavior_rules=behavior_rules,
         )
         if new_summary and new_summary.strip():
-            await set_conversation_summary(user_id, channel_id, new_summary.strip())
+            # Cap summary at 1500 chars to prevent unbounded context growth
+            capped = new_summary.strip()[:1500]
+            await set_conversation_summary(user_id, channel_id, capped)
     except Exception as exc:
         logger.exception("Summary error: %s", exc)

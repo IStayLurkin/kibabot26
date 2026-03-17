@@ -229,7 +229,7 @@ class LLMService:
         ) -> List[Dict[str, str]]:
             memory_lines = "\n".join([f"- {k}: {v}" for k, v in memory.items()]) if memory else "- none"
             history_lines = []
-            for author_type, content, _ in recent_messages[-10:]:
+            for author_type, content, _ in recent_messages:
                 role = "assistant" if author_type == "bot" else "user"
                 history_lines.append({"role": role, "content": content})
 

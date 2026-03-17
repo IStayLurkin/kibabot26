@@ -21,6 +21,7 @@ except ImportError:
 from core.config import (
     MUSIC_DEFAULT_QUALITY,
     MUSIC_REQUEST_TIMEOUT_SECONDS,
+    OLLAMA_MODEL,
 )
 from core.executors import HEAVY_EXECUTOR
 from core.feature_flags import MEDIA_OUTPUT_DIR
@@ -52,10 +53,10 @@ class MusicService:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "http://localhost:11434/api/chat",
-                    json={"model": "qwen3-coder:7b", "keep_alive": 0}
+                    json={"model": OLLAMA_MODEL, "keep_alive": 0}
                 ) as resp:
                     if resp.status == 200:
-                        logger.debug("Qwen3 ejected from VRAM.")
+                        logger.debug("%s ejected from VRAM.", OLLAMA_MODEL)
             await asyncio.sleep(1)
             torch.cuda.empty_cache()
             gc.collect()
@@ -68,10 +69,13 @@ class MusicService:
         path = self.output_dir / filename
         try:
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_melody_local, prompt, str(path))
+            result = await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_melody_local, prompt, str(path))
+            return result
         except Exception as e:
             logger.error("Melody generation failed: %s", e)
             return ""
+        finally:
+            self.clear_vram()
 
     async def generate_song_clip(
         self,
@@ -87,10 +91,13 @@ class MusicService:
         prompt = f"{vibe}, {voice_style} vocals, {vocal_mode}, {bpm} BPM. {lyrics}"
         try:
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_yue_studio, prompt, str(path))
+            result = await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_yue_studio, prompt, str(path))
+            return result
         except Exception as e:
             logger.error("YuE Studio generation failed: %s", e)
             return ""
+        finally:
+            self.clear_vram()
 
     def update_studio_settings(self, bpm: int = None, voice: str = None, mode: str = None):
         if bpm:
