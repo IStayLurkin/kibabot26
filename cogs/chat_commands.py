@@ -196,24 +196,29 @@ class ChatCommands(commands.Cog):
                 self.bot.loop
             )
 
+        # Enhance prompt via Ollama
+        enhanced_prompt = await self.llm.enhance_image_prompt(prompt)
+        if enhanced_prompt != prompt:
+            await status_msg.edit(content=f"{icon} **Prompt enhanced. Rendering ({mode})...**\n[░░░░░░░░░░] 0%")
+
         # Call the unified service logic
         if mode == "SDXL":
-            path = await self.image_service.generate_sdxl(prompt, progress_callback=update_bar)
+            path = await self.image_service.generate_sdxl(enhanced_prompt, progress_callback=update_bar)
         else:
-            path = await self.image_service.generate_image(prompt, progress_callback=update_bar)
+            path = await self.image_service.generate_image(enhanced_prompt, progress_callback=update_bar)
 
         if path:
             await status_msg.edit(content=f"✅ **{mode} Generation Complete!**")
-            
+
             image_file = discord.File(path, filename=f"kiba_{mode.lower()}.png")
-            await ctx.send(content=f"Request: *{prompt}* ({mode} Engine)", file=image_file)
+            await ctx.send(content=f"Request: *{enhanced_prompt}* ({mode} Engine)", file=image_file)
 
             # Archive to Gallery
             gallery_channel = self.bot.get_channel(int(GALLERY_CHANNEL_ID)) if GALLERY_CHANNEL_ID else None
             if gallery_channel:
                 archive_file = discord.File(path, filename=f"archive_{mode.lower()}.png")
                 await gallery_channel.send(
-                    content=f"🖼️ **Engine:** {mode}\n👤 **User:** {ctx.author.mention}\n📝 **Prompt:** {prompt}",
+                    content=f"🖼️ **Engine:** {mode}\n👤 **User:** {ctx.author.mention}\n📝 **Prompt:** {enhanced_prompt}",
                     file=archive_file
                 )
         else:
@@ -336,6 +341,50 @@ class ChatCommands(commands.Cog):
         embed.add_field(name="LLM Provider", value="`Ollama (Qwen3-Coder)`")
         embed.add_field(name="HQ Engine", value="`FLUX.2 (Dev-4bit)`")
         embed.add_field(name="Fast Engine", value="`SDXL (Base-1.0)`")
+        await ctx.send(embed=embed)
+
+    @commands.command(name="forget")
+    async def forget_history(self, ctx):
+        """Clears your chat history and memory with Kiba in this channel."""
+        from database.chat_memory import delete_user_history
+        user_id = str(ctx.author.id)
+        channel_id = str(ctx.channel.id)
+        await delete_user_history(user_id, channel_id)
+        embed = discord.Embed(
+            title="🧹 Memory Cleared",
+            description="Your chat history and memory in this channel have been wiped. Starting fresh.",
+            color=discord.Color.red(),
+        )
+        await ctx.send(embed=embed)
+
+    @commands.command(name="models")
+    async def loaded_models(self, ctx):
+        """Shows which AI models are currently loaded in VRAM via Ollama."""
+        models = await asyncio.to_thread(self.hardware_service.get_ollama_running_models)
+        embed = discord.Embed(title="🤖 Active AI Models", color=discord.Color.dark_blue())
+        if not models:
+            embed.description = "No models currently loaded in VRAM."
+        else:
+            for m in models:
+                name = m.get("name", "unknown")
+                size_gb = round(m.get("size", 0) / 1e9, 1)
+                vram_size = m.get("size_vram", 0)
+                vram_gb = round(vram_size / 1e9, 1) if vram_size else "?"
+                embed.add_field(name=name, value=f"Size: {size_gb}GB | VRAM: {vram_gb}GB", inline=False)
+        await ctx.send(embed=embed)
+
+    @commands.command(name="purge")
+    @commands.is_owner()
+    async def purge_channel(self, ctx):
+        """[Owner only] Wipes all chat history for every user in this channel."""
+        from database.chat_memory import delete_channel_history
+        channel_id = str(ctx.channel.id)
+        await delete_channel_history(channel_id)
+        embed = discord.Embed(
+            title="🗑️ Channel History Purged",
+            description=f"All chat history for **#{ctx.channel.name}** has been deleted.",
+            color=discord.Color.dark_red(),
+        )
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["ask", "talk", "fact"])

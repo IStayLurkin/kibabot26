@@ -891,6 +891,19 @@ class LLMService:
         messages = self._simple_messages(prompt)
         return await self.complete_messages(messages)
 
+    async def enhance_image_prompt(self, prompt: str) -> str:
+        """Asks Ollama to enrich a short image prompt. Returns original on any failure."""
+        instruction = (
+            f"Rewrite this image generation prompt to be more detailed and vivid for a diffusion model. "
+            f"Return ONLY the improved prompt, no explanation, no quotes.\n\nOriginal: {prompt}"
+        )
+        try:
+            enhanced = await self.generate_text(instruction)
+            enhanced = enhanced.strip().strip('"').strip("'")
+            return enhanced if enhanced else prompt
+        except Exception:
+            return prompt
+
     async def generate_response(self, prompt: str) -> str:
         return await self.generate_text(prompt)
 
