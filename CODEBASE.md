@@ -76,7 +76,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `image_service.py` | FLUX.2 (4-bit) and SDXL (FP16) generation. Auto-purges after 5min idle. | Uses `HEAVY_EXECUTOR`. `asyncio.Lock` acquired before dispatch. SDXL VAE cast to float32 at load time. |
 | `voice_service.py` | Piper TTS + Faster-Whisper STT. Whisper lazy-loaded, auto-unloads after 5min idle. | STT uses `HEAVY_EXECUTOR`. |
 | `video_service.py` | Video generation stub (disabled) | — |
-| `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject uses `OLLAMA_MODEL` from config (not hardcoded). |
+| `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject reads the live model name from `model_runtime_service.get_active_llm_model()`, falls back to `OLLAMA_MODEL` config if runtime unavailable. Pass `runtime_service=` at construction. |
 | `memory_service.py` | Short/long-term memory read/write. Memory values >20 words are skipped (logged at DEBUG). `blocked_memory_keys` prevents budget/finance keys from being stored. | — |
 | `summary_service.py` | Conversation summarization. Summaries capped at 1500 chars before storage. Triggers after `CHAT_SUMMARY_MIN_MESSAGES=10`. | — |
 | `codegen_service.py` | Code generation | — |
@@ -141,9 +141,11 @@ Shared connection via `db_connection.py`. WAL mode enabled. Do not open new `aio
 | `test_prompt_enhancement.py` | enhance_image_prompt happy path and error fallback |
 | `test_forget_command.py` | delete_user_history, delete_channel_history |
 | `test_models_command.py` | get_ollama_running_models success and error paths |
+| `test_memory_service.py` | extract_memory_fact, should_attempt_memory_storage, blocked finance keys, 20-word cap, AI extraction, store_memory_if_found |
+| `test_chat_service.py` | ChatReply, agentic flag on/off, datetime bypass, behavior rules forwarding, memory context injection, missing LLM fallback |
 
 Run all: `.venv\Scripts\python.exe -m pytest tests/ -v`
-Currently: **33 passing**
+Currently: **64 passing**
 
 ---
 
