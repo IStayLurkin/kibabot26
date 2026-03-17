@@ -64,6 +64,19 @@ async def init_chat_memory_db():
         )
     """)
 
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS user_cooldowns (
+            user_id TEXT PRIMARY KEY,
+            last_used_ts REAL NOT NULL DEFAULT 0
+        )
+    """)
+
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS allowed_channels (
+            channel_name TEXT PRIMARY KEY
+        )
+    """)
+
     await db.commit()
 
 
@@ -252,4 +265,59 @@ async def set_conversation_state(
         last_tool,
         pending_question,
     ))
+    await db.commit()
+
+
+async def get_last_used(user_id: str) -> float:
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT last_used_ts FROM user_cooldowns WHERE user_id = ?",
+        (user_id,),
+    )
+    row = await cursor.fetchone()
+    return row[0] if row else 0.0
+
+
+async def set_last_used(user_id: str, ts: float):
+    db = await get_db()
+    await db.execute(
+        """INSERT INTO user_cooldowns (user_id, last_used_ts) VALUES (?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET last_used_ts = excluded.last_used_ts""",
+        (user_id, ts),
+    )
+    await db.commit()
+
+
+async def get_active_session_count() -> int:
+    """Returns number of unique user/channel sessions updated in the last 24 hours."""
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT COUNT(*) FROM chat_sessions WHERE updated_at >= datetime('now', '-1 day')"
+    )
+    row = await cursor.fetchone()
+    return row[0] if row else 0
+
+
+async def get_allowed_channels() -> list[str]:
+    db = await get_db()
+    cursor = await db.execute("SELECT channel_name FROM allowed_channels")
+    rows = await cursor.fetchall()
+    return [r[0] for r in rows]
+
+
+async def add_allowed_channel(channel_name: str):
+    db = await get_db()
+    await db.execute(
+        "INSERT OR IGNORE INTO allowed_channels (channel_name) VALUES (?)",
+        (channel_name,),
+    )
+    await db.commit()
+
+
+async def remove_allowed_channel(channel_name: str):
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM allowed_channels WHERE channel_name = ?",
+        (channel_name,),
+    )
     await db.commit()

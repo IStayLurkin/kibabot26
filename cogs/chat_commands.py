@@ -30,12 +30,20 @@ logger = get_logger(__name__)
 class ChatCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.user_cooldowns = {}
         self.llm = getattr(bot, "llm_service", None) or LLMService()
         self.allowed_chat_channels = BOT_ALLOWED_CHAT_CHANNELS
         self.dispatcher = AgentDispatcher(bot)
         self.image_service = getattr(bot, "image_service", None)
         self.hardware_service = getattr(bot, "hardware_service", None)
+
+    async def cog_load(self):
+        from database.chat_memory import get_allowed_channels, add_allowed_channel
+        db_channels = await get_allowed_channels()
+        if not db_channels:
+            for ch in self.allowed_chat_channels:
+                await add_allowed_channel(ch)
+        else:
+            self.allowed_chat_channels = set(db_channels)
 
     def _build_services(self) -> dict:
         """Assemble the services dict expected by chat_service.generate_dynamic_reply."""
@@ -54,12 +62,14 @@ class ChatCommands(commands.Cog):
             "behavior_rule_service": getattr(bot, "behavior_rule_service", None),
         }
 
-    def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
-        now = time.monotonic()
-        last_used = self.user_cooldowns.get(user_id, 0.0)
+    async def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
+        from database.chat_memory import get_last_used, set_last_used
+        import time
+        now = time.time()
+        last_used = await get_last_used(str(user_id))
         if now - last_used < seconds:
             return True
-        self.user_cooldowns[user_id] = now
+        await set_last_used(str(user_id), now)
         return False
 
     def is_dm(self, message: discord.Message) -> bool:
@@ -108,6 +118,10 @@ class ChatCommands(commands.Cog):
         status_color = "🟢 Stable" if vram_pct < 90 else "🔴 CRITICAL (OOM Risk)"
         embed.add_field(name="Neural Stability", value=status_color, inline=True)
         
+        from database.chat_memory import get_active_session_count
+        active_sessions = await get_active_session_count()
+        embed.add_field(name="Active Sessions (24h)", value=str(active_sessions), inline=True)
+
         embed.set_footer(text="3090 Ti | Multi-Engine Hot-Swapping Active")
         await ctx.send(embed=embed)
 
@@ -386,6 +400,26 @@ class ChatCommands(commands.Cog):
             color=discord.Color.dark_red(),
         )
         await ctx.send(embed=embed)
+
+    @commands.command(name="allow")
+    @commands.is_owner()
+    async def allow_channel(self, ctx, channel_name: str = None):
+        """[Owner] Add a channel to Kiba's allowed chat list."""
+        from database.chat_memory import add_allowed_channel
+        name = (channel_name or ctx.channel.name).lower()
+        await add_allowed_channel(name)
+        self.allowed_chat_channels.add(name)
+        await ctx.send(f"✅ `#{name}` added to allowed channels.")
+
+    @commands.command(name="deny")
+    @commands.is_owner()
+    async def deny_channel(self, ctx, channel_name: str = None):
+        """[Owner] Remove a channel from Kiba's allowed chat list."""
+        from database.chat_memory import remove_allowed_channel
+        name = (channel_name or ctx.channel.name).lower()
+        await remove_allowed_channel(name)
+        self.allowed_chat_channels.discard(name)
+        await ctx.send(f"✅ `#{name}` removed from allowed channels.")
 
     @commands.command(aliases=["ask", "talk", "fact"])
     async def chat(self, ctx, *, message: str):
