@@ -63,7 +63,7 @@ class OSINTService:
         results = await asyncio.gather(*tasks)
         
         self._record_duration("osint.run_dossier", started_at)
-        return "\n\n--- 🕵️ AGENTIC DOSSIER REPORT ---\n\n" + "\n\n".join(results)
+        return "\n\n--- AGENTIC DOSSIER REPORT ---\n\n" + "\n\n".join(results)
 
     async def whois_lookup(self, domain: str) -> str:
         domain = self._normalize_domain(domain)

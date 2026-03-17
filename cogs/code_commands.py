@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from discord.ext import commands
 
+from core.config import CODE_MAX_OUTPUT_CHARS
+
 
 class CodeCommands(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -60,8 +62,9 @@ class CodeCommands(commands.Cog):
             await ctx.send(f"Read failed: {exc}")
             return
 
-        if len(content) > 3800:
-            content = content[:3800] + "\n...[truncated]"
+        read_limit = min(CODE_MAX_OUTPUT_CHARS, 3800)
+        if len(content) > read_limit:
+            content = content[:read_limit] + "\n...[truncated]"
         await ctx.send(f"```python\n{content}\n```")
 
     @code_group.command(name="list", help="List files in the sandbox workspace.")
@@ -85,6 +88,7 @@ class CodeCommands(commands.Cog):
             await ctx.send(f"Delete failed: {exc}")
 
     @code_group.command(name="run", help="Run a Python file inside the sandbox workspace.")
+    @commands.cooldown(rate=3, per=60, type=commands.BucketType.user)
     async def code_run(self, ctx: commands.Context, filename: str, allow_flag: str | None = None):
         if not await self.ensure_authorized(ctx):
             return

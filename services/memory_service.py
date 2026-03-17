@@ -166,7 +166,8 @@ async def maybe_extract_ai_memory(llm, user_id: str, content: str):
     if memory_key.lower() in blocked_memory_keys:
         return None
 
-    if len(memory_value.split()) > 12:
+    if len(memory_value.split()) > 20:
+        logger.debug("Skipping memory storage: value too long (%d words)", len(memory_value.split()))
         return None
 
     await set_user_memory(user_id, memory_key, memory_value)

@@ -149,7 +149,8 @@ class BehaviorRuleService:
                 if lowered.startswith(prefix):
                     cleaned = cleaned[len(prefix):].strip(" :.-")
                     break
-            old_part, new_part = cleaned.split(" to ", 1)
-            return self.normalize_rule_text(old_part.strip(" :.-")), self.normalize_rule_text(new_part.strip(" :.-"))
+            parts = cleaned.split(" to ", 1)
+            if len(parts) == 2:
+                return self.normalize_rule_text(parts[0].strip(" :.-")), self.normalize_rule_text(parts[1].strip(" :.-"))
 
         return "", ""

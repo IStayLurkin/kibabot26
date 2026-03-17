@@ -1,7 +1,10 @@
+import logging
 import os
 import torch  # Required for the hardware check
 from dotenv import load_dotenv
 from core.constants import BOT_DEFAULT_PREFIX
+
+_config_logger = logging.getLogger(__name__)
 
 from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
@@ -73,12 +76,27 @@ MODEL_PULL_TIMEOUT_SECONDS = int(os.getenv("MODEL_PULL_TIMEOUT_SECONDS", "1800")
 ENABLED_MODEL_PROVIDERS = _parse_str_list(os.getenv("ENABLED_MODEL_PROVIDERS", "ollama,local,hf,automatic1111,comfyui"))
 DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", LLM_PROVIDER).strip().lower()
 
+if DEFAULT_MODEL_PROVIDER not in ENABLED_MODEL_PROVIDERS:
+    _config_logger.warning(
+        "DEFAULT_MODEL_PROVIDER=%r is not in ENABLED_MODEL_PROVIDERS=%r. "
+        "Falling back to first enabled provider.",
+        DEFAULT_MODEL_PROVIDER,
+        ENABLED_MODEL_PROVIDERS,
+    )
+    DEFAULT_MODEL_PROVIDER = ENABLED_MODEL_PROVIDERS[0] if ENABLED_MODEL_PROVIDERS else DEFAULT_MODEL_PROVIDER
+
 CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "G:/code/python/learn_python/bot/discord_bot_things/code_workspace")
 CODE_SANDBOX_MODE = os.getenv("CODE_SANDBOX_MODE", "subprocess").strip().lower()
 CODE_EXECUTION_TIMEOUT_SECONDS = int(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "20"))
 CODE_MAX_OUTPUT_CHARS = int(os.getenv("CODE_MAX_OUTPUT_CHARS", "6000"))
 CODE_ALLOWED_USER_IDS = _parse_int_list(os.getenv("CODE_ALLOWED_USER_IDS", ""))
 CODE_ALLOWED_ROLE_IDS = _parse_int_list(os.getenv("CODE_ALLOWED_ROLE_IDS", ""))
+
+if not CODE_ALLOWED_USER_IDS and not CODE_ALLOWED_ROLE_IDS:
+    _config_logger.warning(
+        "CODE_ALLOWED_USER_IDS and CODE_ALLOWED_ROLE_IDS are both empty. "
+        "Code execution will only be accessible to server admins."
+    )
 
 MAX_PROMPT_LENGTH = int(os.getenv("MAX_PROMPT_LENGTH", "1800"))
 MAX_TTS_LENGTH = int(os.getenv("MAX_TTS_LENGTH", "1500"))

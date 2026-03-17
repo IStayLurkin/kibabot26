@@ -434,7 +434,7 @@ async def generate_dynamic_reply(
             except Exception as exc:
                 logger.exception("Tool execution error: %s", exc)
 
-        if route_decision.requires_agent and getattr(llm, "agentic_chat_enabled", True):
+        if route_decision.requires_agent and getattr(llm, "agentic_chat_enabled", False):
             try:
                 plan = await llm.generate_agent_reply(
                     user_display_name=display_name,

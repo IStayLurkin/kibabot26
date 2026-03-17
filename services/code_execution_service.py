@@ -21,7 +21,7 @@ from database.execution_repository import add_code_run, get_code_run
 
 logger = get_logger(__name__)
 
-DANGEROUS_PATTERNS = (
+DANGEROUS_PATTERNS = tuple(p.lower() for p in (
     "os.system(",
     "subprocess.",
     "shutil.rmtree(",
@@ -32,6 +32,10 @@ DANGEROUS_PATTERNS = (
     "import ctypes",
     "import socket",
     "import winreg",
+    "import requests",
+    "import pickle",
+    "pickle.loads(",
+    "pickle.load(",
     "open('.env'",
     'open(".env"',
     "eval(",
@@ -39,7 +43,9 @@ DANGEROUS_PATTERNS = (
     "__import__",
     "compile(",
     "globals()",
-)
+    "open(os.",
+    "open(path",
+))
 
 
 class CodeExecutionService:
@@ -121,7 +127,7 @@ class CodeExecutionService:
 
     def requires_dangerous_confirmation(self, content: str) -> bool:
         lowered = content.lower()
-        return any(pattern.lower() in lowered for pattern in DANGEROUS_PATTERNS)
+        return any(pattern in lowered for pattern in DANGEROUS_PATTERNS)
 
     async def run_file(self, filename: str, *, user_id: str, channel_id: str, allow_dangerous: bool = False):
         started_at = time.perf_counter()
@@ -138,7 +144,7 @@ class CodeExecutionService:
                 "This file includes blocked or risky patterns. Re-run with `--allow-dangerous` if you really want to execute it."
             )
 
-        command = [sys.executable, str(path.name)]
+        command = [sys.executable, str(path)]
         env = {
             "PYTHONIOENCODING": "utf-8",
             "PYTHONDONTWRITEBYTECODE": "1",

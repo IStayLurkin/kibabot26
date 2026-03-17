@@ -155,9 +155,7 @@ class ToolRouter:
         )
 
     def detect_tool(self, text: str) -> str:
-        if self._looks_non_media_request(text):
-            pass
-        else:
+        if not self._looks_non_media_request(text):
             for pattern in self.IMAGE_PATTERNS:
                 if re.search(pattern, text):
                     return "image"
@@ -258,10 +256,10 @@ class ToolRouter:
         if any(phrase == text for phrase in vague_requests):
             return True
 
-        return len(text.split()) <= 3
+        return len(text.split()) <= 2
 
     def _looks_like_code_request(self, text: str) -> bool:
-        code_markers = ("python", "javascript", "typescript", "bug", "function", "class", "script", "stack trace")
+        code_markers = ("python", "javascript", "typescript", "function(", "def ", "script", "stack trace", "traceback")
         return any(marker in text for marker in code_markers)
 
     def _matches_any(self, text: str, patterns: list[str]) -> bool:
