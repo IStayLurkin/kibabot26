@@ -1,17 +1,19 @@
 # --- MUST BE AT THE ABSOLUTE TOP ---
+import davey
 import os
 # Force all 33GB+ of AI models to stay on your G: drive project folder
 
 # Redirection for Ollama (Qwen3) - Ensures the bot knows where the engine sits
-os.environ['OLLAMA_MODELS'] = r'G:\ollamamodels'
+os.environ['OLLAMA_MODELS'] = '/mnt/g/ollamamodels'
 # ----------------------------------
 # ----------------------------------
 
 import asyncio
+
 import time
 import discord
 from discord.ext import commands
-
+import ctypes.util
 from core.config import (
     DISCORD_BOT_TOKEN,
     BOT_PREFIX,
@@ -36,12 +38,41 @@ from services.video_service import VideoService
 from services.voice_service import VoiceService
 from tasks.task_manager import TaskManager
 
+
+# 2026 DAVE/Opus Hardware Bridge
+if not discord.opus.is_loaded():
+    opus_path = ctypes.util.find_library('opus')
+    if opus_path:
+        discord.opus.load_opus(opus_path)
+    else:
+        # Fallback for hardened Kali paths
+        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+
+# 2026 Voice Engine Bridge
+if not discord.opus.is_loaded():
+    opus_path = ctypes.util.find_library('opus')
+    if opus_path:
+        discord.opus.load_opus(opus_path)
+    else:
+        # Fallback for hardened Kali paths
+        discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+
+
 setup_logging()
 logger = get_logger(__name__)
-
+# Replace your current intents block with this
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True     # Required for the 2026 handshake
+intents.presences = True   # Required to show as "Online" (Green Circle)
 
+
+async def send_long_message(destination, text):
+    if not text:
+        return
+    # Splits by 1900 to stay under 2000 limit
+    for i in range(0, len(text), 1900):
+        await destination.send(text[i:i+1900])
 
 class ExpenseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
@@ -74,23 +105,24 @@ class ExpenseBot(commands.Bot):
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
-        # 1. Ignore yourself and other bots
-        if message.author.bot:
-            return
+            # 1. Ignore yourself and other bots (Stability check)
+            if message.author.bot:
+                return
 
-        # 2. Allow commands to process normally (like !status, !image, !studio)
-        ctx = await self.get_context(message)
-        if ctx.valid:
+            # 2. MANDATORY: The "Command Pass-Through"
+            # This tells the bot to look for prefixes like '!' and run the associated code.
             await self.process_commands(message)
-            return
 
-        # 3. Handle "Natural Chat" via the LangGraph AgentDispatcher
-        # This handles the VRAM-aware logic for Qwen3 vs FLUX.2 vs YuE
-        if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
-            chat_cog = self.get_cog("ChatCommands")
-            if chat_cog:
-                # Routes to the hardware-aware bridge we built
-                await chat_cog.handle_natural_chat(message)
+            # 3. Handle Natural Chat (AI logic)
+            # We only run this if the message WASN'T a valid command.
+            ctx = await self.get_context(message)
+            if not ctx.valid:
+                if self.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
+                    chat_cog = self.get_cog("ChatCommands")
+                    if chat_cog:
+                        # Routes to your Qwen3/LLM bridge
+                        await chat_cog.handle_natural_chat(message)
+           
 
     async def setup_hook(self):
         async with self.performance_tracker.track_service_call("startup.init_db"):
@@ -218,12 +250,14 @@ bot = ExpenseBot(command_prefix=BOT_PREFIX, intents=intents, help_command=None)
 
 @bot.event
 async def on_ready():
+    # Explicitly set status to bypass sidebar sync lag
+    await bot.change_presence(status=discord.Status.online)
+    
     if not bot.startup_banner_printed:
         bot.print_startup_banner()
         bot.startup_banner_printed = True
     else:
         logger.info("[gateway] reconnected user=%s", bot.user)
-
 
 @bot.event
 async def on_resumed():

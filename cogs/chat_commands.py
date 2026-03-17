@@ -1,9 +1,14 @@
+import os, json, time
+import os
 import asyncio
 import time
 import gc
 import torch
 import discord
 import subprocess
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from bot import send_long_message
 import os
 from discord.ext import commands
 
@@ -21,7 +26,7 @@ from services.agent_dispatcher import AgentDispatcher
 from services.chat_service import generate_dynamic_reply
 from services.summary_service import maybe_update_summary
 from core.logging_config import get_logger
-from core.utils import send_chunked
+from bot import send_long_message
 
 logger = get_logger(__name__)
 
@@ -246,7 +251,7 @@ class ChatCommands(commands.Cog):
 
                     if response_text:
                         await add_chat_message(session_id, "bot", response_text)
-                        await send_chunked(destination, response_text)
+                        await send_long_message(destination, response_text)
 
                     if file_path and os.path.exists(file_path):
                         filename = f"kiba_{int(time.time())}.png"
@@ -268,7 +273,7 @@ class ChatCommands(commands.Cog):
 
                     if reply.content:
                         await add_chat_message(session_id, "bot", reply.content)
-                        await send_chunked(destination, reply.content)
+                        await send_long_message(destination, reply.content)
 
                     for fp in reply.file_paths:
                         if fp and os.path.exists(fp):
