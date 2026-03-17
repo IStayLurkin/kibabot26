@@ -282,11 +282,12 @@ class ChatCommands(commands.Cog):
                             filename = f"kiba_{int(time.time())}.png"
                             await destination.send(file=discord.File(fp, filename=filename))
 
-                    await maybe_update_summary(self.llm, user_id, channel_id, session_id)
-
             except Exception:
                 logger.exception("Chat turn failed")
                 await destination.send("❌ Neural sync error. Check terminal.")
+
+        # Run summary update after typing indicator is closed — silent background task
+        asyncio.create_task(maybe_update_summary(self.llm, user_id, channel_id, session_id))
 
     async def handle_natural_chat(self, message: discord.Message):
         if message.author.bot:
