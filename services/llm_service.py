@@ -74,6 +74,10 @@ AGENT POLICY:
 """
 
 
+COMFYUI_POLL_INTERVAL_SECONDS = 1
+COMFYUI_POLL_MAX_ATTEMPTS = 240  # 4 minutes
+
+
 def _extract_json_object(content: str) -> dict | None:
     cleaned = content.strip()
 
@@ -1022,14 +1026,14 @@ class LLMService:
     def _poll_comfyui_history(self, prompt_id: str) -> dict:
         history_url = f"{COMFYUI_BASE_URL.rstrip('/')}/history/{prompt_id}"
         last_error = None
-        for _attempt in range(240):
+        for _attempt in range(COMFYUI_POLL_MAX_ATTEMPTS):
             try:
                 history = self._get_json(history_url, timeout=30)
                 if history and prompt_id in history:
                     return history
             except Exception as exc:
                 last_error = exc
-            time.sleep(1.0)
+            time.sleep(COMFYUI_POLL_INTERVAL_SECONDS)
 
         if last_error is not None:
             raise RuntimeError(f"ComfyUI history polling failed: {last_error}") from last_error
