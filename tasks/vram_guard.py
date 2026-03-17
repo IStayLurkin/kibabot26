@@ -44,7 +44,7 @@ class VRAMGuard(commands.Cog):
     @tasks.loop(minutes=5)
     async def guard_loop(self):
         """
-        Periodically checks VRAM levels. 
+        Periodically checks VRAM levels.
         If high usage is detected while the bot is IDLE, it performs a cache purge.
         """
         # CRITICAL: Check the safety counter from AgentDispatcher
@@ -52,7 +52,7 @@ class VRAMGuard(commands.Cog):
             # Do not cross wires while a model is actively rendering
             return
 
-        current_usage = self._get_vram_usage_mb()
+        current_usage = await asyncio.to_thread(self._get_vram_usage_mb)
         
         if current_usage > self.vram_threshold_mb:
             logger.info("[VRAM GUARD] High idle usage detected: %sMB. Initializing stabilizer...", current_usage)
@@ -65,7 +65,7 @@ class VRAMGuard(commands.Cog):
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
                 
-            new_usage = self._get_vram_usage_mb()
+            new_usage = await asyncio.to_thread(self._get_vram_usage_mb)
             freed = current_usage - new_usage
             logger.info("[VRAM GUARD] Stabilization complete. Freed %sMB. Current: %sMB.", freed, new_usage)
 
