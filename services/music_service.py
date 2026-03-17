@@ -22,6 +22,7 @@ from core.config import (
     MUSIC_DEFAULT_QUALITY,
     MUSIC_REQUEST_TIMEOUT_SECONDS,
 )
+from core.executors import HEAVY_EXECUTOR
 from core.feature_flags import MEDIA_OUTPUT_DIR
 from core.logging_config import get_logger
 
@@ -66,7 +67,8 @@ class MusicService:
         filename = f"melody_{int(time.time())}.wav"
         path = self.output_dir / filename
         try:
-            return await asyncio.to_thread(self._generate_melody_local, prompt, str(path))
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_melody_local, prompt, str(path))
         except Exception as e:
             logger.error("Melody generation failed: %s", e)
             return ""
@@ -84,7 +86,8 @@ class MusicService:
         path = self.output_dir / filename
         prompt = f"{vibe}, {voice_style} vocals, {vocal_mode}, {bpm} BPM. {lyrics}"
         try:
-            return await asyncio.to_thread(self._generate_yue_studio, prompt, str(path))
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_yue_studio, prompt, str(path))
         except Exception as e:
             logger.error("YuE Studio generation failed: %s", e)
             return ""

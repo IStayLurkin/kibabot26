@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 import warnings
 from typing import Optional
+from core.executors import HEAVY_EXECUTOR
 from core.logging_config import get_logger
 from services.hardware_service import HardwareService
 
@@ -92,7 +93,8 @@ class ImageService:
         filename = f"kiba_{mode.lower()}_{int(time.time())}.png"
         filepath = os.path.join(self.output_dir, filename)
         try:
-            return await asyncio.to_thread(self._generate_sync_locked, prompt, filepath, mode, callback)
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_sync_locked, prompt, filepath, mode, callback)
         except Exception as e:
             logger.error("%s generation failed: %s", mode, e)
             return None
