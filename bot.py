@@ -307,10 +307,6 @@ async def main():
     if not DISCORD_BOT_TOKEN:
         raise ValueError("Error: DISCORD_BOT_TOKEN not found in environment variables.")
 
-    for seconds_remaining in range(3, 0, -1):
-        logger.info("Bot starting in %s...", seconds_remaining)
-        await asyncio.sleep(1)
-
     logger.debug("Bot initializing...")
 
     async with bot:
