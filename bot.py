@@ -241,12 +241,24 @@ bot = ExpenseBot(command_prefix=BOT_PREFIX, intents=intents, help_command=None)
 async def on_ready():
     # Explicitly set status to bypass sidebar sync lag
     await bot.change_presence(status=discord.Status.online)
-    
+
     if not bot.startup_banner_printed:
         bot.print_startup_banner()
         bot.startup_banner_printed = True
+        asyncio.create_task(_prewarm_ollama())
     else:
         logger.info("[gateway] reconnected user=%s", bot.user)
+
+
+async def _prewarm_ollama():
+    """Send a minimal dummy request so Ollama loads the model into VRAM before the first real message."""
+    if bot.llm_service is None:
+        return
+    try:
+        await bot.llm_service.generate_text(".")
+        logger.info("[prewarm] Ollama model loaded into VRAM and ready.")
+    except Exception as exc:
+        logger.warning("[prewarm] Ollama pre-warm failed (will load on first message): %s", exc)
 
 @bot.event
 async def on_resumed():
