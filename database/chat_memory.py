@@ -193,6 +193,25 @@ async def get_conversation_state(user_id: str, channel_id: str) -> dict:
     }
 
 
+async def delete_user_history(user_id: str, channel_id: str):
+    """Deletes all chat messages, session, summary, state, and memory for a user/channel."""
+    db = await get_db()
+    await db.execute("DELETE FROM chat_sessions WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
+    await db.execute("DELETE FROM chat_summaries WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
+    await db.execute("DELETE FROM chat_state WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
+    await db.execute("DELETE FROM user_memory WHERE user_id = ?", (user_id,))
+    await db.commit()
+
+
+async def delete_channel_history(channel_id: str):
+    """Wipes ALL chat history for every user in a given channel."""
+    db = await get_db()
+    await db.execute("DELETE FROM chat_sessions WHERE channel_id = ?", (channel_id,))
+    await db.execute("DELETE FROM chat_summaries WHERE channel_id = ?", (channel_id,))
+    await db.execute("DELETE FROM chat_state WHERE channel_id = ?", (channel_id,))
+    await db.commit()
+
+
 async def set_conversation_state(
     user_id: str,
     channel_id: str,
