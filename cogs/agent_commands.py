@@ -66,6 +66,7 @@ class AgentCommands(commands.Cog):
         await ctx.send(f"Agent is currently **{status}** in this channel.")
 
     @commands.command(name="osint")
+    @is_owner_or_admin()
     async def osint_command(self, ctx: commands.Context, *, query: str) -> None:
         if not OSINT_ENABLED:
             await ctx.send("OSINT features are disabled.")
@@ -80,6 +81,7 @@ class AgentCommands(commands.Cog):
                 await ctx.send(f"OSINT lookup failed: {exc}")
 
     @commands.command(name="whois")
+    @is_owner_or_admin()
     async def whois_command(self, ctx: commands.Context, *, domain: str) -> None:
         if not OSINT_ENABLED:
             await ctx.send("OSINT features are disabled.")
@@ -94,6 +96,7 @@ class AgentCommands(commands.Cog):
                 await ctx.send(f"Whois lookup failed: {exc}")
 
     @commands.command(name="domain")
+    @is_owner_or_admin()
     async def domain_command(self, ctx: commands.Context, *, domain: str) -> None:
         if not OSINT_ENABLED:
             await ctx.send("OSINT features are disabled.")

@@ -100,13 +100,13 @@ class AgentDispatcher:
         hardware_context = (
             "SYSTEM CONTEXT:\n"
             "Environment: Local RTX 3090 Ti | 24GB VRAM | G: Drive Storage.\n"
-            f"User Identity: {user_context if user_context else 'Brandon (Owner)'}.\n"
+            f"User Identity: {user_context if user_context else 'Owner'}.\n"
             f"Recent Summary: {summary}\n"
         )
 
         # 3. Call LLM with full context injection
         response = await self.llm.generate_reply(
-            user_display_name="Brandon",
+            user_display_name=user_id,
             user_message=f"{hardware_context}\n\nUser Request: {prompt}",
             memory=dict(memory_rows),
             recent_messages=[], # LLMService handles history via session_id

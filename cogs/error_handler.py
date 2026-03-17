@@ -50,11 +50,28 @@ class ErrorHandler(commands.Cog):
             )
             return
 
+        if isinstance(error, commands.CommandOnCooldown):
+            retry = round(error.retry_after, 1)
+            await self.send_error_embed(
+                ctx,
+                "Cooldown",
+                f"This command is on cooldown. Try again in **{retry}s**."
+            )
+            return
+
         if isinstance(error, commands.NotOwner):
             await self.send_error_embed(
                 ctx,
                 "Access Denied",
                 "You are not allowed to use that command."
+            )
+            return
+
+        if isinstance(error, commands.CheckFailure):
+            await self.send_error_embed(
+                ctx,
+                "Access Denied",
+                "You don't have permission to use that command."
             )
             return
 

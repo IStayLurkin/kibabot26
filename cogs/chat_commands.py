@@ -275,8 +275,11 @@ class ChatCommands(commands.Cog):
                         await send_long_message(destination, response_text)
 
                     if file_path and os.path.exists(file_path):
-                        filename = f"kiba_{int(time.time())}.png"
+                        ext = os.path.splitext(file_path)[1] or ".png"
+                        filename = f"kiba_{int(time.time())}{ext}"
                         await destination.send(file=discord.File(file_path, filename=filename))
+                    elif not response_text:
+                        await destination.send("❌ Generation failed. Check VRAM availability and terminal logs.")
 
                 else:
                     # Text path — full chat_service pipeline with tool routing,
@@ -426,6 +429,7 @@ class ChatCommands(commands.Cog):
         await self.handle_chat_turn(ctx, ctx.author, ctx.channel, message)
 
     @commands.command(name="studio")
+    @commands.is_owner()
     async def set_studio_config(self, ctx, setting: str, value: str):
         music_service = getattr(self.bot, "music_service", None)
         if not music_service:

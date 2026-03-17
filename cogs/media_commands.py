@@ -112,6 +112,10 @@ class MediaCommands(commands.Cog):
 
     @commands.command(name="melody", aliases=["music", "tune"])
     async def melody_command(self, ctx: commands.Context, *, prompt: str) -> None:
+        if self.music_service is None:
+            await ctx.send("❌ Music service is not loaded.")
+            return
+
         prompt = prompt.strip()
         if not prompt:
             await ctx.send("Provide a prompt. Example: `!melody calm dreamy piano loop`")
@@ -121,26 +125,48 @@ class MediaCommands(commands.Cog):
             await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
             return
 
-        await ctx.send("On it, composing that melody now...")
+        await ctx.send("🎵 On it, composing that melody now... (this takes a minute)")
         async with ctx.typing():
             try:
                 melody_path = await self.music_service.generate_melody(prompt)
-                await ctx.send(file=discord.File(melody_path, filename=Path(melody_path).name))
+                if melody_path and Path(melody_path).exists():
+                    await ctx.send(file=discord.File(melody_path, filename=Path(melody_path).name))
+                else:
+                    await ctx.send("❌ Melody generation failed. Check VRAM availability.")
             except Exception as exc:
-                await ctx.send(f"Melody generation failed: {exc}")
+                await ctx.send(f"❌ Melody generation failed: {exc}")
 
     @commands.command(name="song", aliases=["vocals", "sing"])
-    async def song_command(self, ctx: commands.Context) -> None:
-        song_session_service = getattr(self.bot, "song_session_service", None)
-        if song_session_service is None:
-            await ctx.send("Song generation setup is not available right now.")
+    async def song_command(self, ctx: commands.Context, *, prompt: str) -> None:
+        """Generate a full vocal song clip via YuE. Usage: !song <genre/vibe>. <lyrics>"""
+        if self.music_service is None:
+            await ctx.send("❌ Music service is not loaded.")
             return
 
-        question = song_session_service.begin_session(str(ctx.author.id), str(ctx.channel.id))
-        await ctx.send(
-            "Let's build your vocal clip.\n"
-            f"{question}"
-        )
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send(
+                "Provide a vibe and optional lyrics.\n"
+                "Example: `!song cinematic epic female vocal. We rise at dawn, we fight till dusk`"
+            )
+            return
+
+        await ctx.send("🎤 Starting YuE song generation... (this takes ~6 minutes on 3090 Ti)")
+        async with ctx.typing():
+            try:
+                audio_path = await self.music_service.generate_song_clip(
+                    vibe=prompt.split(".")[0].strip(),
+                    bpm=self.music_service.bpm,
+                    voice_style=self.music_service.voice_style,
+                    vocal_mode=self.music_service.vocal_mode,
+                    lyrics=prompt.split(".", 1)[1].strip() if "." in prompt else prompt,
+                )
+                if audio_path and Path(audio_path).exists():
+                    await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+                else:
+                    await ctx.send("❌ Song generation failed. Check VRAM availability and YuE repo path.")
+            except Exception as exc:
+                await ctx.send(f"❌ Song generation failed: {exc}")
 
 
 async def setup(bot: commands.Bot) -> None:

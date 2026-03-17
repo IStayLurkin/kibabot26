@@ -40,13 +40,6 @@ class RuntimeCommands(commands.Cog):
         _ok, message = await self.runtime.set_active_model("llm", model_name)
         await ctx.send(message)
 
-    @model_group.command(name="switch", help="Switch the active LLM model at runtime.")
-    async def model_switch(self, ctx: commands.Context, *, model_name: str):
-        if self.runtime is None:
-            return await ctx.send(_RUNTIME_UNAVAILABLE)
-        _ok, message = await self.runtime.set_active_model("llm", model_name)
-        await ctx.send(message)
-
     @model_group.command(name="pull", help="Pull or install a model into local/provider-managed storage.")
     async def model_pull(self, ctx: commands.Context, *, model_name: str):
         if self.runtime is None:
@@ -97,13 +90,6 @@ class RuntimeCommands(commands.Cog):
 
     @image_model_group.command(name="set", help="Switch the active image model at runtime.")
     async def image_model_set(self, ctx: commands.Context, *, model_name: str):
-        if self.runtime is None:
-            return await ctx.send(_RUNTIME_UNAVAILABLE)
-        _ok, message = await self.runtime.set_active_model("image", model_name)
-        await ctx.send(message)
-
-    @image_model_group.command(name="switch", help="Switch the active image model at runtime.")
-    async def image_model_switch(self, ctx: commands.Context, *, model_name: str):
         if self.runtime is None:
             return await ctx.send(_RUNTIME_UNAVAILABLE)
         _ok, message = await self.runtime.set_active_model("image", model_name)
@@ -164,13 +150,6 @@ class RuntimeCommands(commands.Cog):
         _ok, message = await self.runtime.set_active_model("audio", model_name)
         await ctx.send(message)
 
-    @audio_model_group.command(name="switch", help="Switch the active audio model at runtime.")
-    async def audio_model_switch(self, ctx: commands.Context, *, model_name: str):
-        if self.runtime is None:
-            return await ctx.send(_RUNTIME_UNAVAILABLE)
-        _ok, message = await self.runtime.set_active_model("audio", model_name)
-        await ctx.send(message)
-
     @audio_model_group.command(name="pull", help="Pull or install an audio model into local/provider-managed storage.")
     async def audio_model_pull(self, ctx: commands.Context, *, model_name: str):
         if self.runtime is None:
@@ -198,20 +177,8 @@ class RuntimeCommands(commands.Cog):
         await self.runtime.add_model(provider, model_name, "audio")
         await ctx.send(f"Registered audio model `{provider}:{model_name}`.")
 
-    @commands.command(name="cuda", help="Show CUDA and GPU status.")
-    async def cuda_command(self, ctx: commands.Context, action: str | None = None):
-        if action and action.strip().lower() not in {"status"}:
-            await ctx.send("Usage: `!cuda` or `!cuda status`")
-            return
-        if self.runtime is None:
-            return await ctx.send(_RUNTIME_UNAVAILABLE)
-        await ctx.send(await self.runtime.get_hardware_status_text())
-
-    @commands.command(name="gpu", help="Show GPU, CUDA, and device status.")
-    async def gpu_command(self, ctx: commands.Context, action: str | None = None):
-        if action and action.strip().lower() not in {"status"}:
-            await ctx.send("Usage: `!gpu` or `!gpu status`")
-            return
+    @commands.command(name="cuda", aliases=["gpu"], help="Show CUDA and GPU status.")
+    async def cuda_command(self, ctx: commands.Context):
         if self.runtime is None:
             return await ctx.send(_RUNTIME_UNAVAILABLE)
         await ctx.send(await self.runtime.get_hardware_status_text())
