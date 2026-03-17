@@ -59,7 +59,6 @@ class VideoService:
                     "video.generate_video",
                     (time.perf_counter() - started_at) * 1000,
                 )
-        print(f"[DEBUG] Video Request -> Local Model: {self.model_name} | GPU: CUDA0")
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):
             return result
