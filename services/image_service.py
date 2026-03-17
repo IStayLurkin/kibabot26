@@ -1,7 +1,6 @@
 import os
 import time
 import gc
-import threading
 import torch
 import asyncio
 import aiohttp
@@ -33,7 +32,7 @@ class ImageService:
         self.output_dir = "outputs/images"
         self._last_activity = 0
         self._unload_task = None
-        self._generation_lock = threading.Lock()
+        self._generation_lock = asyncio.Lock()
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _get_vram_usage(self) -> int:
@@ -94,14 +93,11 @@ class ImageService:
         filepath = os.path.join(self.output_dir, filename)
         try:
             loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_sync_locked, prompt, filepath, mode, callback)
+            async with self._generation_lock:
+                return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_sync, prompt, filepath, mode, callback)
         except Exception as e:
             logger.error("%s generation failed: %s", mode, e)
             return None
-
-    def _generate_sync_locked(self, prompt, filepath, mode, callback):
-        with self._generation_lock:
-            return self._generate_sync(prompt, filepath, mode, callback)
 
     def _generate_sync(self, prompt, filepath, mode, callback):
             try: 
