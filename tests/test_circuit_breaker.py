@@ -21,9 +21,9 @@ def test_circuit_resets_on_success():
     assert cb.is_available() is True
 
 def test_circuit_recovers_after_cooldown():
-    cb = CircuitBreaker(failure_threshold=2, cooldown_seconds=0)
+    cb = CircuitBreaker(failure_threshold=2, cooldown_seconds=0.05)
     cb.record_failure()
     cb.record_failure()
     assert cb.is_available() is False
-    time.sleep(0.01)
+    time.sleep(0.1)
     assert cb.is_available() is True
