@@ -24,15 +24,17 @@ urllib3>=2.6.3,<3
 # Agent & Bot Logic
 langgraph>=1.1.2,<2
 aiohttp>=3.13.3,<4
-scipy>=1.17.1,<2
 discord.py>=2.7.1,<3
 
 # Media Processing
 opencv-python>=4.13.0,<5
 Pillow>=12.1.1,<13
 
-# Audio
+# Audio / Speech
 faster-whisper>=1.1.0,<2
+scipy>=1.17.1,<2
+
+# Database
 aiosqlite>=0.21.0,<1
 
 # Voice (Discord)
