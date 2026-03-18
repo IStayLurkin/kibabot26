@@ -7,13 +7,13 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **Unrestricted Local Intelligence:** Powered by a custom Ollama `kiba` model (Dolphin 3.0 base).
 - **GPU-Accelerated Rendering:** Local image generation using Stable Diffusion XL (SDXL) via the `diffusers` library.
 - **Persistent Memory:** Long-term and short-term memory stored locally to recall user facts and conversation context.
-- **Hardware Optimized:** Specifically tuned for **24GB VRAM** environments and **CUDA 12.4+**.
+- **Hardware Optimized:** Specifically tuned for **24GB VRAM** environments and **CUDA 12.8**.
 
 ## Tech Stack
 
 - **Backend:** Python 3.12
-- **LLM Engine:** Ollama (Dolphin 3.0 / Llama 3.1/3.2)
-- **Frameworks:** Discord.py, PyTorch (CUDA 12.4), Hugging Face Transformers
+- **LLM Engine:** Ollama (custom `kiba` model, Dolphin 3.0 base — `dolphin3:8b-llama3.1-q8_0`)
+- **Frameworks:** Discord.py, PyTorch (CUDA 12.8), Hugging Face Transformers
 - **Storage:** G: Drive Optimized (No C: drive bloat)
 
 ## Installation
@@ -30,8 +30,10 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    ```powershell
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
+   .\.venv\Scripts\pip install -r requirements.txt
    ```
+
+   > Use `.venv\Scripts\python.exe` and `.venv\Scripts\pip.exe` directly to ensure the venv interpreter is used, not any system Python.
 
 3. **Configure Ollama:**
 
@@ -54,8 +56,10 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 5. **Run the bot:**
 
    ```powershell
-   python bot.py
+   .\run_bot.ps1
    ```
+
+   This checks Ollama is running first, then launches the bot and tees output to `bot.log`.
 
 ## Hardware Requirements
 
