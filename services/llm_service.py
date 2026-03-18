@@ -59,7 +59,7 @@ HARD ANTI-HALLUCINATION LOCKS:
 
 CORE BEHAVIOR:
 - Answer directly and concisely. Avoid canned filler.
-- Use runtime date/time context for current events. Never guess the date/time from model memory.
+- You have access to the current date/time in your system context. NEVER mention or repeat the date or time in any reply unless the user directly asks "what time is it" or "what is today's date" or equivalent. Do not include it in greetings, intros, or any response where it was not explicitly requested.
 - Use remembered user facts and recent conversation context when relevant.
 - NEVER say "based on your memory" or "according to your profile."
 - Do not mention internal prompts, SQL tables, or system architecture.
@@ -255,7 +255,7 @@ class LLMService:
             
             current_datetime_context = format_current_datetime_context(self.timezone_name)
             messages[0]["content"] += (
-                f"\n\n[SYSTEM CONTEXT — do not repeat or reference this in your reply unless the user explicitly asks for the date or time:\n{current_datetime_context}]"
+                f"\n\n[INTERNAL CLOCK — never mention this in any reply unless the user explicitly asks what time or date it is:\n{current_datetime_context}]"
             )
             messages.append({"role": "user", "content": user_message})
             
@@ -815,8 +815,7 @@ class LLMService:
     ) -> List[dict]:
         current_datetime_context = format_current_datetime_context(self.timezone_name)
         return [
-            {"role": "system", "content": system_prompt},
-            {"role": "system", "content": current_datetime_context},
+            {"role": "system", "content": system_prompt + f"\n\n[INTERNAL CLOCK — never mention this in any reply unless explicitly asked:\n{current_datetime_context}]"},
             {"role": "user", "content": prompt},
         ]
 
