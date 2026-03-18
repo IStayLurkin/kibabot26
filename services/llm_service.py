@@ -254,10 +254,10 @@ class LLMService:
             messages.extend(history_lines)
             
             current_datetime_context = format_current_datetime_context(self.timezone_name)
-            messages.append({
-                "role": "user", 
-                "content": f"[RUNTIME OVERRIDE:\n{current_datetime_context}]\n\n{user_message}"
-            })
+            messages[0]["content"] += (
+                f"\n\n[SYSTEM CONTEXT — do not repeat or reference this in your reply unless the user explicitly asks for the date or time:\n{current_datetime_context}]"
+            )
+            messages.append({"role": "user", "content": user_message})
             
             return messages
 
