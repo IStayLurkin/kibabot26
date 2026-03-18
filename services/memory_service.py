@@ -11,6 +11,7 @@ from services.tool_router import (
 
 logger = get_logger(__name__)
 
+_router = ToolRouter()
 
 NON_MEMORY_PREFIXES = (
     "help me ",
@@ -83,8 +84,7 @@ def should_attempt_memory_storage(content: str) -> bool:
     if any(lowered.startswith(prefix) for prefix in NON_MEMORY_PREFIXES):
         return False
 
-    router = ToolRouter()
-    route_decision = router.route(cleaned)
+    route_decision = _router.route(cleaned)
 
     if route_decision.intent in {
         INTENT_MULTI_STEP_HELP,

@@ -1,25 +1,23 @@
-import aiosqlite
-
-DB_PATH = "bot.db"
+from database.db_connection import get_db
 
 
 async def init_execution_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS code_runs (
-                run_id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                channel_id TEXT NOT NULL,
-                filename TEXT NOT NULL,
-                command TEXT NOT NULL,
-                exit_code INTEGER NOT NULL,
-                duration_ms REAL NOT NULL,
-                stdout_text TEXT NOT NULL DEFAULT '',
-                stderr_text TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        await db.commit()
+    db = await get_db()
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS code_runs (
+            run_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            command TEXT NOT NULL,
+            exit_code INTEGER NOT NULL,
+            duration_ms REAL NOT NULL,
+            stdout_text TEXT NOT NULL DEFAULT '',
+            stderr_text TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    await db.commit()
 
 
 async def add_code_run(
@@ -33,21 +31,38 @@ async def add_code_run(
     stdout_text: str,
     stderr_text: str,
 ):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT INTO code_runs (
-                run_id,
-                user_id,
-                channel_id,
-                filename,
-                command,
-                exit_code,
-                duration_ms,
-                stdout_text,
-                stderr_text
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
+    db = await get_db()
+    await db.execute("""
+        INSERT INTO code_runs (
+            run_id,
+            user_id,
+            channel_id,
+            filename,
+            command,
+            exit_code,
+            duration_ms,
+            stdout_text,
+            stderr_text
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        run_id,
+        user_id,
+        channel_id,
+        filename,
+        command,
+        exit_code,
+        duration_ms,
+        stdout_text,
+        stderr_text,
+    ))
+    await db.commit()
+
+
+async def get_code_run(run_id: str):
+    db = await get_db()
+    cursor = await db.execute("""
+        SELECT
             run_id,
             user_id,
             channel_id,
@@ -57,28 +72,11 @@ async def add_code_run(
             duration_ms,
             stdout_text,
             stderr_text,
-        ))
-        await db.commit()
-
-
-async def get_code_run(run_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            SELECT
-                run_id,
-                user_id,
-                channel_id,
-                filename,
-                command,
-                exit_code,
-                duration_ms,
-                stdout_text,
-                stderr_text,
-                created_at
-            FROM code_runs
-            WHERE run_id = ?
-        """, (run_id,))
-        row = await cursor.fetchone()
+            created_at
+        FROM code_runs
+        WHERE run_id = ?
+    """, (run_id,))
+    row = await cursor.fetchone()
 
     if not row:
         return None

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 INTENT_CASUAL_CHAT = "casual_chat"
@@ -37,55 +38,55 @@ class ToolRouter:
         "emojis",
     )
 
-    IMAGE_PATTERNS = [
+    IMAGE_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!image|!img)\b",
         r"\b(?:generate|make|create|draw)\b.*\b(?:image|picture|art|photo)\b",
         r"^(?:draw me|draw|generate (?:me )?(?:a|an)?|create (?:me )?(?:a|an)?|make (?:me )?(?:a|an)?)\b",
         r"^(?:color|colour)\s+(?:a\s+)?(?:pic|picture|photo|image)\s+of\b",
-    ]
+    )]
 
-    VOICE_PATTERNS = [
+    VOICE_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!tts|!say)\b",
         r"\b(?:text to speech|tts|voice gen|generate voice|say this)\b",
-    ]
+    )]
 
-    VIDEO_PATTERNS = [
+    VIDEO_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!video|!animate)\b",
         r"\b(?:generate|make|create)\b.*\bvideo\b",
-    ]
+    )]
 
-    MUSIC_PATTERNS = [
+    MUSIC_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!melody|!music|!tune)\b",
         r"\b(?:generate|make|create|compose)\b.*\b(?:melody|music|tune|beat|loop)\b",
         r"^(?:compose|make|create)\s+(?:me\s+)?(?:a\s+)?(?:melody|tune|beat|loop)\b",
-    ]
+    )]
 
-    CODE_PATTERNS = [
+    CODE_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!code|!fixcode|!explaincode|!refactor)\b",
         r"\b(?:write code|fix code|debug code|refactor code|explain code|review this code|analyze this code)\b",
-    ]
+    )]
 
-    OSINT_PATTERNS = [
+    OSINT_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:!osint|!whois|!domain)\b",
         r"\b(?:whois|rdap|dns|domain lookup|public intel|osint|look up this domain)\b",
-    ]
+    )]
 
-    PLANNING_PATTERNS = [
+    PLANNING_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"\b(?:plan|roadmap|steps|step by step|walk me through|organize this)\b",
-    ]
+    )]
 
-    TROUBLESHOOTING_PATTERNS = [
+    TROUBLESHOOTING_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"\b(?:error|bug|broken|not working|failed|crash|issue|problem|traceback|fix this)\b",
-    ]
+    )]
 
-    MULTI_STEP_PATTERNS = [
+    MULTI_STEP_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"\b(?:help me|show me how|how do i|how should i|what should i do|best way to)\b",
-    ]
+    )]
 
-    CASUAL_PATTERNS = [
+    CASUAL_PATTERNS: ClassVar[list] = [re.compile(p) for p in (
         r"^(?:hi|hello|hey|yo|sup)\b",
         r"\b(?:how are you|what's up|wyd)\b",
-    ]
+    )]
 
     def route(self, content: str) -> RouteDecision:
         text = content.strip()
@@ -157,27 +158,27 @@ class ToolRouter:
     def detect_tool(self, text: str) -> str:
         if not self._looks_non_media_request(text):
             for pattern in self.IMAGE_PATTERNS:
-                if re.search(pattern, text):
+                if pattern.search(text):
                     return "image"
 
         for pattern in self.VOICE_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return "voice"
 
         for pattern in self.VIDEO_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return "video"
 
         for pattern in self.MUSIC_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return "music"
 
         for pattern in self.CODE_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return "code"
 
         for pattern in self.OSINT_PATTERNS:
-            if re.search(pattern, text):
+            if pattern.search(text):
                 return "osint"
 
         return ""
@@ -262,8 +263,8 @@ class ToolRouter:
         code_markers = ("python", "javascript", "typescript", "function(", "def ", "script", "stack trace", "traceback")
         return any(marker in text for marker in code_markers)
 
-    def _matches_any(self, text: str, patterns: list[str]) -> bool:
-        return any(re.search(pattern, text) for pattern in patterns)
+    def _matches_any(self, text: str, patterns: list) -> bool:
+        return any(p.search(text) for p in patterns)
 
     def _looks_non_media_request(self, text: str) -> bool:
         lowered = text.strip().lower()

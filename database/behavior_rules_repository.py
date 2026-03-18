@@ -1,32 +1,29 @@
-import aiosqlite
-
-DB_PATH = "bot.db"
+from database.db_connection import get_db
 
 
 async def init_behavior_rules_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS behavior_rules (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                rule_text TEXT NOT NULL UNIQUE,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                created_by TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        await db.commit()
+    db = await get_db()
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS behavior_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_text TEXT NOT NULL UNIQUE,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    await db.commit()
 
 
 async def list_behavior_rules():
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            SELECT id, rule_text, enabled, created_by, created_at, updated_at
-            FROM behavior_rules
-            ORDER BY id ASC
-        """)
-        rows = await cursor.fetchall()
-
+    db = await get_db()
+    cursor = await db.execute("""
+        SELECT id, rule_text, enabled, created_by, created_at, updated_at
+        FROM behavior_rules
+        ORDER BY id ASC
+    """)
+    rows = await cursor.fetchall()
     return [
         {
             "id": row[0],
@@ -41,55 +38,55 @@ async def list_behavior_rules():
 
 
 async def add_behavior_rule(rule_text: str, created_by: str = ""):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT INTO behavior_rules (rule_text, enabled, created_by, updated_at)
-            VALUES (?, 1, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(rule_text)
-            DO UPDATE SET
-                enabled = 1,
-                created_by = CASE
-                    WHEN excluded.created_by != '' THEN excluded.created_by
-                    ELSE behavior_rules.created_by
-                END,
-                updated_at = CURRENT_TIMESTAMP
-        """, (rule_text, created_by))
-        await db.commit()
+    db = await get_db()
+    await db.execute("""
+        INSERT INTO behavior_rules (rule_text, enabled, created_by, updated_at)
+        VALUES (?, 1, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(rule_text)
+        DO UPDATE SET
+            enabled = 1,
+            created_by = CASE
+                WHEN excluded.created_by != '' THEN excluded.created_by
+                ELSE behavior_rules.created_by
+            END,
+            updated_at = CURRENT_TIMESTAMP
+    """, (rule_text, created_by))
+    await db.commit()
 
 
 async def remove_behavior_rule(rule_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            DELETE FROM behavior_rules
-            WHERE id = ?
-        """, (rule_id,))
-        await db.commit()
-        return cursor.rowcount
+    db = await get_db()
+    cursor = await db.execute("""
+        DELETE FROM behavior_rules
+        WHERE id = ?
+    """, (rule_id,))
+    await db.commit()
+    return cursor.rowcount
 
 
 async def update_behavior_rule(rule_id: int, rule_text: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            UPDATE behavior_rules
-            SET rule_text = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        """, (rule_text, rule_id))
-        await db.commit()
-        return cursor.rowcount
+    db = await get_db()
+    cursor = await db.execute("""
+        UPDATE behavior_rules
+        SET rule_text = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (rule_text, rule_id))
+    await db.commit()
+    return cursor.rowcount
 
 
 async def replace_behavior_rule(old_rule_text: str, new_rule_text: str, created_by: str = ""):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("""
-            UPDATE behavior_rules
-            SET rule_text = ?, created_by = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE lower(rule_text) = lower(?)
-        """, (new_rule_text, created_by, old_rule_text))
-        await db.commit()
-        return cursor.rowcount
+    db = await get_db()
+    cursor = await db.execute("""
+        UPDATE behavior_rules
+        SET rule_text = ?, created_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE lower(rule_text) = lower(?)
+    """, (new_rule_text, created_by, old_rule_text))
+    await db.commit()
+    return cursor.rowcount
 
 
 async def clear_behavior_rules():
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM behavior_rules")
-        await db.commit()
+    db = await get_db()
+    await db.execute("DELETE FROM behavior_rules")
+    await db.commit()

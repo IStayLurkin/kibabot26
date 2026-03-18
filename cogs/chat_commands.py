@@ -87,7 +87,7 @@ class ChatCommands(commands.Cog):
         """Displays the 3090 Ti Status Dashboard."""
         used_vram = self.hardware_service.get_vram_usage_mb() if self.hardware_service else 0
         total_vram = GPU_TOTAL_VRAM_MB
-        vram_pct = round((used_vram / total_vram) * 100, 1)
+        vram_pct = round((used_vram / total_vram) * 100, 1) if total_vram > 0 else 0.0
         
         active_engine = "Ollama (Qwen3-Coder)"
         if used_vram > 12000:
