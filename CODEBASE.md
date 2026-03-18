@@ -69,7 +69,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `chat_service.py` | Chat pipeline — memory, context, routing to `LLMService` | Builds full context: system prompt + memories + summary + history. |
 | `chat_router.py` | Routes messages to correct service | — |
 | `agent_service.py` | Agentic loop logic | — |
-| `agent_dispatcher.py` | Dispatches agent tool calls. Increments `bot.generating_count` during media generation. | — |
+| `agent_dispatcher.py` | Dispatches agent tool calls. Increments `bot.generating_count` during media generation. | `generating_count` is incremented before `try`, decremented in `finally` — both `media_node` and `music_agent_node`. Increment and `try` are adjacent with no `await` between them, so the decrement always runs on any exception. No leak. |
 | `model_runtime_service.py` | Runtime state — active provider/model, hardware status | `initialize()` fetches hardware once, passes to `sync_models` to avoid duplicate probes. |
 | `model_storage_service.py` | Model storage, ollama pull | — |
 | `hardware_service.py` | CUDA/VRAM/Ollama availability checks. `get_vram_usage_mb()` via nvidia-smi. `get_ollama_running_models()` via `/api/ps`. | All blocking calls wrapped in `asyncio.to_thread`. |
@@ -77,14 +77,14 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `voice_service.py` | Piper TTS + Faster-Whisper STT. Whisper lazy-loaded, auto-unloads after 5min idle. | STT uses `HEAVY_EXECUTOR`. |
 | `video_service.py` | Video generation stub (disabled) | — |
 | `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject reads the live model name from `model_runtime_service.get_active_llm_model()`, falls back to `OLLAMA_MODEL` config if runtime unavailable. Pass `runtime_service=` at construction. |
-| `memory_service.py` | Short/long-term memory read/write. Memory values >20 words are skipped (logged at DEBUG). `blocked_memory_keys` prevents budget/finance keys from being stored. | — |
-| `summary_service.py` | Conversation summarization. Summaries capped at 1500 chars before storage. Triggers after `CHAT_SUMMARY_MIN_MESSAGES=10`. | — |
+| `memory_service.py` | Short/long-term memory read/write. Memory values >20 words are skipped (logged at DEBUG). `blocked_memory_keys` is an exact-match set on the LLM-extracted `memory_key`: `{"income", "salary", "budget", "budget_categories", "groceries", "rent", "fun_money", "extra"}`. Not substring matching — the full key must match. | — |
+| `summary_service.py` | Conversation summarization. Summaries capped at 1500 chars before storage. Triggers after `CHAT_SUMMARY_MIN_MESSAGES=10`. Known: if the bot restarts mid-summarization, the partial summary write is silently dropped — the previous summary remains. Low severity; next message cycle will re-trigger. | — |
 | `codegen_service.py` | Code generation | — |
 | `code_execution_service.py` | Sandboxed code execution. `DANGEROUS_PATTERNS` lowercased at definition — includes `requests`, `pickle.loads/load`, `eval`, `exec`, `subprocess`, etc. Uses full path in subprocess command. | — |
 | `osint_service.py` | OSINT wrapper — WHOIS, DNS, SSL | — |
 | `behavior_rule_service.py` | Persistent behavior rules. `extract_rule_replacement` safely guards the `" to "` split — returns `("", "")` if delimiter not present. | — |
 | `performance_service.py` | Perf tracking / latency metrics | — |
-| `tool_router.py` | Routes tool-use requests. `detect_tool` correctly skips image detection for non-media requests. Clarifying question threshold is ≤2 words. Code markers are language-specific (`python`, `def `, `function(`, etc.) — not generic words like `class`/`bug`. | — |
+| `tool_router.py` | Routes tool-use requests. `detect_tool` correctly skips image detection for non-media requests. Clarifying question threshold is ≤2 words — applied to the **full lowercased message**, not extracted intent. "draw a cat" (3 words) does not trigger clarification. Code markers are language-specific (`python`, `def `, `function(`, etc.) — not generic words like `class`/`bug`. | — |
 | `time_service.py` | Datetime context for prompts | — |
 | `command_help_service.py` | Dynamic help text | — |
 | `song_session_service.py` | Music session state | — |
@@ -113,7 +113,7 @@ Shared connection via `db_connection.py`. WAL mode enabled. Do not open new `aio
 | `chat_messages` | Per-session message history |
 | `user_memory` | Key-value facts per user |
 | `chat_summaries` | Rolling conversation summaries (capped 1500 chars) |
-| `chat_state` | goal, intent, response_mode, last_tool, pending_question |
+| `chat_state` | goal, intent, response_mode, last_tool, pending_question. `pending_question` is actively written in `chat_service.py` when clarification is needed (line 411, 465) and cleared on reply (line 431, 523, 549). Also injected into LLM context (line 447). Not orphaned. |
 | `user_cooldowns` | Last used timestamp per user (survives restarts) |
 | `allowed_channels` | DB-backed channel allowlist |
 
