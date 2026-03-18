@@ -261,6 +261,7 @@ class ChatCommands(commands.Cog):
                                 os.remove(temp_path)
 
         await add_chat_message(session_id, "user", content)
+        logger.info("[chat] user=%s msg=%r", str(author), content[:300])
 
         async with destination.typing():
             try:
@@ -297,6 +298,7 @@ class ChatCommands(commands.Cog):
 
                     if reply.content:
                         await add_chat_message(session_id, "bot", reply.content)
+                        logger.info("[chat] bot=%r", reply.content[:300])
                         content = reply.content
                         if len(content) <= 200:
                             await destination.send(content)

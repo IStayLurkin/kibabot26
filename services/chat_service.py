@@ -26,6 +26,8 @@ from services.tool_router import (
 
 logger = get_logger(__name__)
 
+_router = ToolRouter()
+
 
 @dataclass(slots=True)
 class ChatReply:
@@ -243,6 +245,7 @@ async def generate_dynamic_reply(
     started_at = time.perf_counter()
     services = services or {}
     services.setdefault("llm", llm)
+    logger.debug("[chat] generate_dynamic_reply called user_text=%r", user_text[:80])
 
     try:
         model_runtime_service = services.get("model_runtime_service")
@@ -387,14 +390,38 @@ async def generate_dynamic_reply(
                 goal="answer current date/time question",
             )
 
+        from services.chat_router import is_greeting
+        if is_greeting(user_text.lower().strip()):
+            memory_rows = await get_user_memory(user_id)
+            memory = format_memory(memory_rows)
+            name = memory.get("name", display_name)
+            return ChatReply(
+                content=f"Hey {name}.",
+                intent="casual_chat",
+                response_mode="direct",
+                goal="greet user",
+            )
+
         recent_messages = await get_recent_chat_messages(session_id, limit=CHAT_RECENT_MESSAGE_LIMIT)
         memory_rows = await get_user_memory(user_id)
         memory = format_memory(memory_rows)
+
+        lowered = user_text.lower().strip()
+        if any(phrase in lowered for phrase in (
+            "what do you remember", "what do you know about me",
+            "do you remember me", "what do you remember about me",
+            "do you remember anything about me",
+        )):
+            conversation_summary = await get_conversation_summary(user_id, channel_id)
+            parts = [f"{k}: {v}" for k, v in memory.items()]
+            if conversation_summary:
+                parts.append(f"summary: {conversation_summary}")
+            content = ("Here's what I have on you: " + "; ".join(parts)) if parts else "Nothing stored yet."
+            return ChatReply(content=content, intent="question_answering", response_mode="direct", goal="recall memory")
         conversation_summary = await get_conversation_summary(user_id, channel_id)
         conversation_state = await get_conversation_state(user_id, channel_id)
 
-        router = ToolRouter()
-        route_decision = router.route(user_text)
+        route_decision = _router.route(user_text)
         conversation_goal = conversation_state.get("goal") or user_text.strip()
         tool_context = _build_tool_context(route_decision, conversation_state)
 
@@ -499,6 +526,7 @@ async def generate_dynamic_reply(
             except Exception as exc:
                 logger.exception("Agentic reply error: %s", exc)
 
+        logger.debug("[chat] falling through to generate_reply")
         try:
             reply = await llm.generate_reply(
                 user_display_name=display_name,

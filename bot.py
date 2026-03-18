@@ -313,6 +313,12 @@ async def main():
     if not DISCORD_BOT_TOKEN:
         raise ValueError("Error: DISCORD_BOT_TOKEN not found in environment variables.")
 
+    # Increase default thread pool so asyncio.to_thread LLM calls
+    # don't starve the Discord heartbeat on long inference.
+    import concurrent.futures
+    loop = asyncio.get_event_loop()
+    loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=8))
+
     logger.debug("Bot initializing...")
 
     async with bot:
