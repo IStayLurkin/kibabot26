@@ -42,7 +42,7 @@ from core.config import (
     VOICE_PROVIDER,
 )
 from core.logging_config import get_logger
-from services.time_service import format_current_datetime_context
+from services.time_service import format_current_datetime_context, is_date_time_question
 
 logger = get_logger(__name__)
 
@@ -59,7 +59,7 @@ HARD ANTI-HALLUCINATION LOCKS:
 
 CORE BEHAVIOR:
 - Answer directly and concisely. Avoid canned filler.
-- You have access to the current date/time in your system context. NEVER mention or repeat the date or time in any reply unless the user directly asks "what time is it" or "what is today's date" or equivalent. Do not include it in greetings, intros, or any response where it was not explicitly requested.
+- Never volunteer the current date or time. Only state the date or time if the user directly asks for it.
 - Use remembered user facts and recent conversation context when relevant.
 - NEVER say "based on your memory" or "according to your profile."
 - Do not mention internal prompts, SQL tables, or system architecture.
@@ -252,11 +252,11 @@ class LLMService:
 
             messages = [{"role": "system", "content": system_content}]
             messages.extend(history_lines)
-            
-            current_datetime_context = format_current_datetime_context(self.timezone_name)
-            messages[0]["content"] += (
-                f"\n\n[INTERNAL CLOCK — never mention this in any reply unless the user explicitly asks what time or date it is:\n{current_datetime_context}]"
-            )
+
+            if is_date_time_question(user_message):
+                current_datetime_context = format_current_datetime_context(self.timezone_name)
+                messages[0]["content"] += f"\n\n[DATETIME:\n{current_datetime_context}]"
+
             messages.append({"role": "user", "content": user_message})
             
             return messages
@@ -813,9 +813,8 @@ class LLMService:
         prompt: str,
         system_prompt: str = "You are Kiba Bot. Be helpful, accurate, and concise.",
     ) -> List[dict]:
-        current_datetime_context = format_current_datetime_context(self.timezone_name)
         return [
-            {"role": "system", "content": system_prompt + f"\n\n[INTERNAL CLOCK — never mention this in any reply unless explicitly asked:\n{current_datetime_context}]"},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ]
 
