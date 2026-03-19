@@ -120,12 +120,17 @@ _FILLER_SENTENCE_MARKERS = re.compile(
     r"if you have any (?:questions|other)|"
     r"don't hesitate to|"
     r"I(?:'m| am) here (?:if|for|whenever)|"
-    r"any (?:other )?questions",
+    r"any (?:other )?questions|"
+    r"(?:take care|stay safe|get well|feel better)[!.,]?\s*$|"
+    r"we can (?:chat|talk) (?:more |again )?(?:later|another time)|"
+    r"(?:chat|talk) (?:more |again )?later|"
+    r"how (?:'bout|about) yourself|"
+    r"what about you\b",
     re.IGNORECASE,
 )
 
 _FILLER_OPENING = re.compile(
-    r"^(?:Hello|Hi|Hey|Greetings|Sure|Got it|Great|I see|Understood|Noted|Absolutely|Of course|Certainly)[!.,]?\s*",
+    r"^(?:Hello|Hi|Hey|Greetings|Got it|Great|I see|Understood|Noted|Absolutely|Of course|Certainly|Sure enough|Sure thing)[!.,]?\s*",
     re.IGNORECASE,
 )
 
