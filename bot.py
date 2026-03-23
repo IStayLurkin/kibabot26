@@ -17,6 +17,9 @@ from core.config import (
     DISCORD_BOT_TOKEN,
     BOT_PREFIX,
     BOT_TIMEZONE,
+    SEARXNG_ENABLED,
+    SEARXNG_BASE_URL,
+    SEARXNG_MAX_RESULTS,
 )
 from core.logging_config import setup_logging, get_logger
 from database.database import init_db
@@ -28,6 +31,7 @@ from services.hardware_service import HardwareService
 from services.image_service import ImageService
 from services.llm_service import LLMService
 from services.model_storage_service import ModelStorageService
+from services.search_service import SearchService
 from services.music_service import MusicService
 from services.model_runtime_service import ModelRuntimeService
 from services.osint_service import OSINTService
@@ -131,10 +135,12 @@ class ExpenseBot(commands.Bot):
         await self.model_runtime_service.initialize()
         self.command_help_service = CommandHelpService()
         self.behavior_rule_service = BehaviorRuleService()
+        search_service = SearchService(base_url=SEARXNG_BASE_URL, max_results=SEARXNG_MAX_RESULTS) if SEARXNG_ENABLED else None
         self.llm_service = LLMService(
             performance_tracker=self.performance_tracker,
             model_runtime_service=self.model_runtime_service,
             behavior_rule_service=self.behavior_rule_service,
+            search_service=search_service,
         )
         self.image_service = ImageService(
             performance_tracker=self.performance_tracker,

@@ -39,6 +39,7 @@ from core.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
     OLLAMA_REQUEST_TIMEOUT_SECONDS,
+    SEARXNG_ENABLED,
     VOICE_PROVIDER,
 )
 from core.logging_config import get_logger
@@ -260,7 +261,7 @@ def _extract_message_text(message) -> str:
 
 
 class LLMService:
-    def __init__(self, performance_tracker=None, model_runtime_service=None, behavior_rule_service=None):
+    def __init__(self, performance_tracker=None, model_runtime_service=None, behavior_rule_service=None, search_service=None):
         self.provider = LLM_PROVIDER
         self.temperature = LLM_TEMPERATURE
         self.max_tokens = LLM_MAX_TOKENS
@@ -270,6 +271,7 @@ class LLMService:
         self.performance_tracker = performance_tracker
         self.model_runtime_service = model_runtime_service
         self.behavior_rule_service = behavior_rule_service
+        self.search_service = search_service
         self._client_cache: dict[str, object] = {}
         self._circuit_breakers = {
             "ollama": CircuitBreaker(failure_threshold=3, cooldown_seconds=120),
@@ -296,6 +298,7 @@ class LLMService:
             conversation_goal: str = "",
             response_mode: str = "",
             tool_context: str = "",
+            search_results: list[dict] | None = None,
         ) -> List[Dict[str, str]]:
             memory_lines = "\n".join([f"- {k}: {v}" for k, v in memory.items()]) if memory else "- none"
             history_lines = []
@@ -314,6 +317,14 @@ class LLMService:
                 preamble_parts.append(f"Intent: {intent_category}")
             if conversation_goal:
                 preamble_parts.append(f"Goal: {conversation_goal}")
+            if search_results:
+                lines = ["[SEARCH RESULTS]"]
+                for r in search_results:
+                    title = r.get("title", "")
+                    snippet = r.get("snippet", "")
+                    url = r.get("url", "")
+                    lines.append(f"- {title}: {snippet} ({url})")
+                preamble_parts.append("\n".join(lines))
 
             system_content = SYSTEM_PROMPT.strip() + "\n\n" + "\n".join(preamble_parts)
 
@@ -505,6 +516,7 @@ class LLMService:
         response_mode: str = "",
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
+        search_results: list[dict] | None = None,
     ) -> str:
         messages = self._inject_behavior_rules(self._build_messages(
             user_display_name=user_display_name,
@@ -516,6 +528,7 @@ class LLMService:
             conversation_goal=conversation_goal,
             response_mode=response_mode,
             tool_context=tool_context,
+            search_results=search_results,
         ), behavior_rules)
 
         errors = []
@@ -574,6 +587,15 @@ class LLMService:
     ) -> str:
         started_at = time.perf_counter()
         try:
+            search_results = []
+            if self.search_service is not None and SEARXNG_ENABLED:
+                try:
+                    queries = await asyncio.to_thread(self._classify_search_need, user_message)
+                    if queries:
+                        search_results = await self.search_service.search_many(queries)
+                except Exception as exc:
+                    logger.warning("Search pipeline failed, continuing without results: %s", exc)
+
             return await asyncio.to_thread(
                 self._generate_reply_sync,
                 user_display_name,
@@ -586,6 +608,7 @@ class LLMService:
                 response_mode,
                 tool_context,
                 behavior_rules,
+                search_results,
             )
         finally:
             if self.performance_tracker is not None:
