@@ -188,7 +188,8 @@ class ExpenseBot(commands.Bot):
             behavior_rule_service=self.behavior_rule_service,
             search_service=search_service,
         )
-        embedding_service = EmbeddingService(base_url=OLLAMA_BASE_URL.replace("/v1", ""), model="nomic-embed-text")
+        _embed_base = OLLAMA_BASE_URL[:-3] if OLLAMA_BASE_URL.endswith("/v1") else OLLAMA_BASE_URL
+        embedding_service = EmbeddingService(base_url=_embed_base, model="nomic-embed-text")
         self.vector_memory_service = VectorMemoryService(embedding_service=embedding_service, top_k=5)
         self.image_service = ImageService(
             performance_tracker=self.performance_tracker,

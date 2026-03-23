@@ -698,6 +698,7 @@ class LLMService:
         pending_question: str = "",
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
+        relevant_memories: list[str] | None = None,
     ) -> dict:
         messages = self._inject_behavior_rules(self._build_messages(
             user_display_name=user_display_name,
@@ -709,6 +710,7 @@ class LLMService:
             conversation_goal=conversation_goal,
             response_mode="agentic",
             tool_context=tool_context,
+            relevant_memories=relevant_memories,
         ), behavior_rules)
 
         plan_prompt = {
@@ -782,6 +784,7 @@ class LLMService:
         pending_question: str = "",
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
+        relevant_memories: list[str] | None = None,
     ) -> dict:
         started_at = time.perf_counter()
         try:
@@ -797,6 +800,7 @@ class LLMService:
                 pending_question,
                 tool_context,
                 behavior_rules,
+                relevant_memories,
             )
         finally:
             if self.performance_tracker is not None:

@@ -13,6 +13,7 @@ from database.chat_memory import (
     get_user_memory,
     set_conversation_state,
 )
+from database.db_connection import get_db
 from services.chat_router import get_rule_based_fallback
 from services.memory_service import format_memory, maybe_store_episodic_memory
 from services.time_service import (
@@ -427,7 +428,6 @@ async def generate_dynamic_reply(
         db_conn = None
         try:
             if vector_memory_service is not None:
-                from database.db_connection import get_db
                 db_conn = await get_db()
                 relevant_memories = await vector_memory_service.retrieve(db_conn, user_id=user_id, query=user_text)
         except Exception as exc:
@@ -488,6 +488,7 @@ async def generate_dynamic_reply(
                     pending_question=conversation_state.get("pending_question", ""),
                     tool_context=tool_context,
                     behavior_rules=behavior_rules,
+                    relevant_memories=relevant_memories,
                 )
 
                 state_update = plan.get("state_update", {})
@@ -529,6 +530,16 @@ async def generate_dynamic_reply(
                     last_tool=tool_name,
                     pending_question=pending_question,
                 )
+
+                if vector_memory_service is not None and db_conn is not None:
+                    asyncio.create_task(maybe_store_episodic_memory(
+                        llm=llm,
+                        vector_memory_service=vector_memory_service,
+                        db=db_conn,
+                        user_id=user_id,
+                        user_message=user_text,
+                        bot_reply=answer,
+                    ))
 
                 return ChatReply(
                     content=answer,
