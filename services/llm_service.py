@@ -419,15 +419,15 @@ class LLMService:
                     "If no: return JSON {\"should_store\": false, \"content\": \"\"}\n"
                     "Return ONLY valid JSON. No explanation. No markdown.\n"
                     "Examples:\n"
-                    "  User: 'I'm building a Discord bot in Python' -> {\"should_store\": true, \"content\": \"Brandon is building a Discord bot in Python\"}\n"
+                    "  User: 'I'm building a Discord bot in Python' -> {\"should_store\": true, \"content\": \"The user is building a Discord bot in Python\"}\n"
                     "  User: 'hey what's up' -> {\"should_store\": false, \"content\": \"\"}\n"
-                    "  User: 'I prefer dark mode always' -> {\"should_store\": true, \"content\": \"Brandon prefers dark mode\"}\n"
+                    "  User: 'I prefer dark mode always' -> {\"should_store\": true, \"content\": \"The user prefers dark mode\"}\n"
                 ),
             },
             {"role": "user", "content": f"User said: {user_message}\nBot replied: {bot_reply}"},
         ]
         try:
-            raw = self._complete_messages_sync(prompt, temperature=0.0, max_tokens=100)
+            raw = self._complete_messages_sync(prompt, temperature=0.0, max_tokens=150)
             parsed = json.loads(raw.strip())
             if isinstance(parsed, dict) and "should_store" in parsed:
                 return parsed
