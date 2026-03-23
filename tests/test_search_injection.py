@@ -46,3 +46,33 @@ def test_build_messages_search_results_default_none(llm):
     )
     system_content = messages[0]["content"]
     assert "SEARCH RESULTS" not in system_content
+
+
+def test_build_messages_injects_relevant_memories(llm):
+    memories = [
+        "Brandon is building a Discord bot in Python.",
+        "Brandon prefers concise answers.",
+    ]
+    messages = llm._build_messages(
+        user_display_name="Brandon",
+        user_message="remind me what I said",
+        memory={},
+        recent_messages=[],
+        relevant_memories=memories,
+    )
+    system_content = messages[0]["content"]
+    assert "RELEVANT MEMORIES" in system_content
+    assert "Brandon is building a Discord bot in Python." in system_content
+    assert "Brandon prefers concise answers." in system_content
+
+
+def test_build_messages_no_relevant_memories_no_block(llm):
+    messages = llm._build_messages(
+        user_display_name="Brandon",
+        user_message="hey",
+        memory={},
+        recent_messages=[],
+        relevant_memories=None,
+    )
+    system_content = messages[0]["content"]
+    assert "RELEVANT MEMORIES" not in system_content

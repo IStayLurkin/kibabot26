@@ -320,6 +320,7 @@ class LLMService:
             response_mode: str = "",
             tool_context: str = "",
             search_results: list[dict] | None = None,
+            relevant_memories: list[str] | None = None,
         ) -> List[Dict[str, str]]:
             memory_lines = "\n".join([f"- {k}: {v}" for k, v in memory.items()]) if memory else "- none"
             history_lines = []
@@ -345,6 +346,12 @@ class LLMService:
                     snippet = r.get("snippet", "")
                     url = r.get("url", "")
                     lines.append(f"- {title}: {snippet} ({url})")
+                preamble_parts.append("\n".join(lines))
+
+            if relevant_memories:
+                lines = ["[RELEVANT MEMORIES]"]
+                for m in relevant_memories:
+                    lines.append(f"- {m}")
                 preamble_parts.append("\n".join(lines))
 
             system_content = SYSTEM_PROMPT.strip() + "\n\n" + "\n".join(preamble_parts)
