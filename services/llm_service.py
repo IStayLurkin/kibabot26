@@ -145,6 +145,16 @@ _HALLUCINATED_TURN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+_MARKDOWN_LINK = re.compile(
+    r"!?\[([^\]]*)\]\(https?://[^\)]+\)",  # [text](url) and ![alt](url)
+    re.IGNORECASE,
+)
+
+_BARE_URL = re.compile(
+    r"https?://\S+",
+    re.IGNORECASE,
+)
+
 _EMOJI = re.compile(
     "["
     "\U0001F300-\U0001FFFF"  # misc symbols, pictographs, emoticons
@@ -160,6 +170,9 @@ def _strip_filler_closing(text: str) -> str:
     original = text.strip()
     # Cut off any hallucinated user turn
     text = _HALLUCINATED_TURN.sub("", original).strip()
+    # Strip markdown links/images and bare URLs
+    text = _MARKDOWN_LINK.sub(r"\1", text).strip()
+    text = _BARE_URL.sub("", text).strip()
     # Strip emojis
     text = _EMOJI.sub("", text).strip()
     # Split into sentences, drop trailing filler sentences
