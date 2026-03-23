@@ -582,6 +582,7 @@ class LLMService:
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
         search_results: list[dict] | None = None,
+        relevant_memories: list[str] | None = None,
     ) -> str:
         messages = self._inject_behavior_rules(self._build_messages(
             user_display_name=user_display_name,
@@ -594,6 +595,7 @@ class LLMService:
             response_mode=response_mode,
             tool_context=tool_context,
             search_results=search_results,
+            relevant_memories=relevant_memories,
         ), behavior_rules)
 
         errors = []
@@ -649,6 +651,7 @@ class LLMService:
         response_mode: str = "",
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
+        relevant_memories: list[str] | None = None,
     ) -> str:
         started_at = time.perf_counter()
         try:
@@ -674,6 +677,7 @@ class LLMService:
                 tool_context,
                 behavior_rules,
                 search_results,
+                relevant_memories,
             )
         finally:
             if self.performance_tracker is not None:
