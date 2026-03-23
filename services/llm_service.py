@@ -403,6 +403,43 @@ class LLMService:
             logger.warning("Search classifier failed: %s", exc)
             return []
 
+    def extract_episodic_memory_sync(self, user_message: str, bot_reply: str) -> dict:
+        """
+        Synchronous LLM call to decide if a conversation turn contains episodic content worth storing.
+        Returns {"should_store": bool, "content": str}.
+        """
+        prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a memory curator. Given a conversation turn, decide if it contains "
+                    "a personal fact, preference, project, or ongoing context about the user that would "
+                    "be useful to remember in future conversations.\n"
+                    "If yes: return JSON {\"should_store\": true, \"content\": \"<one sentence summary of the fact>\"}\n"
+                    "If no: return JSON {\"should_store\": false, \"content\": \"\"}\n"
+                    "Return ONLY valid JSON. No explanation. No markdown.\n"
+                    "Examples:\n"
+                    "  User: 'I'm building a Discord bot in Python' -> {\"should_store\": true, \"content\": \"Brandon is building a Discord bot in Python\"}\n"
+                    "  User: 'hey what's up' -> {\"should_store\": false, \"content\": \"\"}\n"
+                    "  User: 'I prefer dark mode always' -> {\"should_store\": true, \"content\": \"Brandon prefers dark mode\"}\n"
+                ),
+            },
+            {"role": "user", "content": f"User said: {user_message}\nBot replied: {bot_reply}"},
+        ]
+        try:
+            raw = self._complete_messages_sync(prompt, temperature=0.0, max_tokens=100)
+            parsed = json.loads(raw.strip())
+            if isinstance(parsed, dict) and "should_store" in parsed:
+                return parsed
+            return {"should_store": False, "content": ""}
+        except Exception as exc:
+            logger.warning("[episodic_memory] LLM extraction failed: %s", exc)
+            return {"should_store": False, "content": ""}
+
+    async def extract_episodic_memory(self, user_message: str, bot_reply: str) -> dict:
+        """Async wrapper for extract_episodic_memory_sync."""
+        return await asyncio.to_thread(self.extract_episodic_memory_sync, user_message, bot_reply)
+
     def _ollama_client(self) -> OpenAI:
         return OpenAI(
             base_url=OLLAMA_BASE_URL,
