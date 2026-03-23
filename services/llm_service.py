@@ -260,6 +260,27 @@ def _extract_message_text(message) -> str:
     return ""
 
 
+_SEARCH_SIGNALS = re.compile(
+    r"\b("
+    r"who won|who is winning|who's winning|who leads|who lost"
+    r"|latest|recent|recently|right now|current|currently|today|tonight|this week|this month|this year"
+    r"|news|update|updates|score|scores|standings|results"
+    r"|price|cost|worth|stock|stocks|market"
+    r"|weather|forecast|temperature"
+    r"|what happened|what's happening|what is happening"
+    r"|when did|when was|when is|when are"
+    r"|election|vote|votes|voted|polling|polls"
+    r"|release|released|announced|launch|launched"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _message_needs_search(message: str) -> bool:
+    """Return True if the message contains signals that web search would help."""
+    return bool(_SEARCH_SIGNALS.search(message))
+
+
 class LLMService:
     def __init__(self, performance_tracker=None, model_runtime_service=None, behavior_rule_service=None, search_service=None):
         self.provider = LLM_PROVIDER
@@ -588,7 +609,7 @@ class LLMService:
         started_at = time.perf_counter()
         try:
             search_results = []
-            if self.search_service is not None and SEARXNG_ENABLED:
+            if self.search_service is not None and SEARXNG_ENABLED and _message_needs_search(user_message):
                 try:
                     queries = await asyncio.to_thread(self._classify_search_need, user_message)
                     if queries:
