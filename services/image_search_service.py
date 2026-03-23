@@ -42,12 +42,14 @@ def search_local(topic: str) -> list[str]:
     folder = Path(LOCAL_IMAGE_DIR)
     if not folder.is_dir():
         return []
-    keyword = topic.lower().replace(" ", "_")
+    # Match on both space and underscore variants so "cat memes" finds "cat_memes.gif" and vice versa
+    normalized = topic.lower()
+    keywords = [normalized, normalized.replace(" ", "_"), normalized.replace("_", " ")]
     results = []
     for ext in _SUPPORTED_EXTS:
         results.extend(
             str(p) for p in folder.iterdir()
-            if p.suffix.lower() == ext and keyword in p.name.lower()
+            if p.suffix.lower() == ext and any(kw in p.name.lower() for kw in keywords)
         )
     return results[:_MAX_CANDIDATES]
 

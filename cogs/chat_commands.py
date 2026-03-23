@@ -284,20 +284,20 @@ class ChatCommands(commands.Cog):
                             async with aiohttp.ClientSession() as _sess:
                                 async with _sess.get(url_or_path) as _resp:
                                     if _resp.status == 200:
-                                        content_length = int(_resp.headers.get("Content-Length", 0))
-                                        if content_length > 8 * 1024 * 1024:
-                                            logger.warning("[image_search] Skipping oversized image (%d bytes)", content_length)
+                                        data = await _resp.read()
+                                        if len(data) > 8 * 1024 * 1024:
+                                            logger.warning("[image_search] Skipping oversized image (%d bytes)", len(data))
+                                            await destination.send("Found one but it's too big to send.")
                                         else:
-                                            data = await _resp.read()
-                                            if len(data) <= 8 * 1024 * 1024:
-                                                ext = Path(url_or_path.split("?")[0]).suffix or ".gif"
-                                                fname = f"kiba_image{ext}"
-                                                await destination.send(file=discord.File(
-                                                    fp=io.BytesIO(data),
-                                                    filename=fname
-                                                ))
+                                            ext = Path(url_or_path.split("?")[0]).suffix or ".gif"
+                                            fname = f"kiba_image{ext}"
+                                            await destination.send(file=discord.File(
+                                                fp=io.BytesIO(data),
+                                                filename=fname
+                                            ))
                                     else:
                                         logger.warning("[image_search] CDN returned %d for %s", _resp.status, url_or_path)
+                                        await destination.send("Couldn't fetch that one.")
                     else:
                         await destination.send("Couldn't find anything clean for that.")
                     return
