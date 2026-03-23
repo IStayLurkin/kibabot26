@@ -30,12 +30,15 @@ class VectorMemoryService:
         self._top_k = top_k
 
     async def store(self, db, user_id: str, content: str) -> None:
-        """Embed content and store in vector_memories. Silently skips on embed failure."""
-        embedding = await self._embed.embed(content)
-        if not embedding:
-            logger.warning("[vector_memory] Skipping store — embed returned empty for user %s", user_id)
-            return
-        await store_vector_memory(db, user_id=user_id, content=content, embedding=embedding)
+        """Embed content and store in vector_memories. Silently skips on embed failure or DB error."""
+        try:
+            embedding = await self._embed.embed(content)
+            if not embedding:
+                logger.warning("[vector_memory] Skipping store — embed returned empty for user %s", user_id)
+                return
+            await store_vector_memory(db, user_id=user_id, content=content, embedding=embedding)
+        except Exception as exc:
+            logger.warning("[vector_memory] Store failed for user %s: %s", user_id, exc)
 
     async def retrieve(self, db, user_id: str, query: str) -> list[str]:
         """Embed query and return top-K most similar memory contents. Returns [] on failure."""
