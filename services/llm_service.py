@@ -62,6 +62,7 @@ FORBIDDEN — never output any of these:
 - Robotic self-descriptions: "functioning", "operating smoothly", "peak performance", "as an AI"
 - Moralizing: no safety lectures, no disclaimers, no "it's important to remember", no "be responsible"
 - Date/time: never volunteer the current date or time unless directly asked.
+- URLs or links: never generate, invent, or guess URLs. If you cannot provide a real, verified link, say so.
 
 TYPOS:
 - If the user misspells something, infer the intent and respond to that. Never point out the typo.
@@ -114,7 +115,7 @@ def _extract_json_object(content: str) -> dict | None:
 
 _FILLER_SENTENCE_MARKERS = re.compile(
     r"(?:how|what) can I (?:assist|help)|"
-    r"feel free to (?:ask|reach out|let me know)|"
+    r"feel free to (?:ask|reach out|let me know|keep chatting|chat)|"
     r"let me know if (?:you need|there's|you have)|"
     r"if you need (?:anything|help|assistance)|"
     r"if you have any (?:questions|other)|"
@@ -122,6 +123,8 @@ _FILLER_SENTENCE_MARKERS = re.compile(
     r"I(?:'m| am) here (?:if|for|whenever)|"
     r"any (?:other )?questions|"
     r"(?:take care|stay safe|get well|feel better)[!.,]?\s*$|"
+    r"later (?:alligator|gator|dude|man|bro)[!.,]?\s*$|"
+    r"(?:see you|see ya|catch you|catch ya|talk (?:to you )?later|ttyl|later)[!.,]?\s*$|"
     r"we can (?:chat|talk) (?:more |again )?(?:later|another time)|"
     r"(?:chat|talk) (?:more |again )?later|"
     r"how (?:'bout|about) yourself|"
