@@ -1,11 +1,14 @@
+import io
 import os
 import asyncio
 import time
 import gc
 import torch
 import discord
+import aiohttp
 import subprocess
 import sys
+from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from bot import send_long_message
 from discord.ext import commands
@@ -272,24 +275,31 @@ class ChatCommands(commands.Cog):
                 if image_topic:
                     url_or_path = await find_verified_image(image_topic)
                     if url_or_path:
-                        from pathlib import Path as _Path
-                        p = _Path(url_or_path)
+                        p = Path(url_or_path)
                         if p.exists():
                             # Local file
                             await destination.send(file=discord.File(str(p), filename=p.name))
                         else:
-                            # Remote URL — download and send as attachment
-                            import aiohttp as _aiohttp
-                            async with _aiohttp.ClientSession() as _sess:
+                            # Remote URL — download and send as attachment (8 MB cap)
+                            async with aiohttp.ClientSession() as _sess:
                                 async with _sess.get(url_or_path) as _resp:
                                     if _resp.status == 200:
-                                        data = await _resp.read()
-                                        ext = _Path(url_or_path.split("?")[0]).suffix or ".gif"
-                                        fname = f"kiba_image{ext}"
-                                        await destination.send(file=discord.File(
-                                            fp=__import__("io").BytesIO(data),
-                                            filename=fname
-                                        ))
+                                        content_length = int(_resp.headers.get("Content-Length", 0))
+                                        if content_length > 8 * 1024 * 1024:
+                                            logger.warning("[image_search] Skipping oversized image (%d bytes)", content_length)
+                                        else:
+                                            data = await _resp.read()
+                                            if len(data) <= 8 * 1024 * 1024:
+                                                ext = Path(url_or_path.split("?")[0]).suffix or ".gif"
+                                                fname = f"kiba_image{ext}"
+                                                await destination.send(file=discord.File(
+                                                    fp=io.BytesIO(data),
+                                                    filename=fname
+                                                ))
+                                    else:
+                                        logger.warning("[image_search] CDN returned %d for %s", _resp.status, url_or_path)
+                    else:
+                        await destination.send("Couldn't find anything clean for that.")
                     return
 
                 intent = self.dispatcher.classify_intent(content)
