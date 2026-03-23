@@ -147,4 +147,7 @@ MUSIC_DEFAULT_QUALITY = os.getenv("MUSIC_DEFAULT_QUALITY", "studio").strip().low
 MEDIA_SAFETY_MODE = os.getenv("MEDIA_SAFETY_MODE", "none").strip().lower()
 
 GALLERY_CHANNEL_ID = os.getenv("GALLERY_CHANNEL_ID", "").strip()
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
+GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "").strip()
+LOCAL_IMAGE_DIR = os.getenv("LOCAL_IMAGE_DIR", "").strip()
 GPU_TOTAL_VRAM_MB = _parse_int(os.getenv("GPU_TOTAL_VRAM_MB", "24576"), 24576)
