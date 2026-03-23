@@ -14,7 +14,7 @@ def test_detects_find_me():
     assert extract_image_request("find me funny cat pics") == "funny cat pics"
 
 def test_detects_post():
-    assert extract_image_request("post some memes") == "some memes"
+    assert extract_image_request("post some memes") == "memes"
 
 def test_no_match_returns_none():
     assert extract_image_request("how ya feeling") is None
