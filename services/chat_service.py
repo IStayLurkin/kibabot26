@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 
@@ -13,7 +14,7 @@ from database.chat_memory import (
     set_conversation_state,
 )
 from services.chat_router import get_rule_based_fallback
-from services.memory_service import format_memory
+from services.memory_service import format_memory, maybe_store_episodic_memory
 from services.time_service import (
     build_current_datetime_reply,
     is_date_time_question,
@@ -419,6 +420,19 @@ async def generate_dynamic_reply(
             content = ("Here's what I have on you: " + "; ".join(parts)) if parts else "Nothing stored yet."
             return ChatReply(content=content, intent="question_answering", response_mode="direct", goal="recall memory")
         conversation_summary = await get_conversation_summary(user_id, channel_id)
+
+        # Semantic memory retrieval
+        relevant_memories = []
+        vector_memory_service = (services or {}).get("vector_memory_service")
+        db_conn = None
+        try:
+            if vector_memory_service is not None:
+                from database.db_connection import get_db
+                db_conn = await get_db()
+                relevant_memories = await vector_memory_service.retrieve(db_conn, user_id=user_id, query=user_text)
+        except Exception as exc:
+            logger.warning("[vector_memory] Retrieval failed in chat_service: %s", exc)
+
         conversation_state = await get_conversation_state(user_id, channel_id)
 
         route_decision = _router.route(user_text)
@@ -539,6 +553,7 @@ async def generate_dynamic_reply(
                 response_mode="direct",
                 tool_context=tool_context,
                 behavior_rules=behavior_rules,
+                relevant_memories=relevant_memories,
             )
             if reply and reply.strip():
                 await set_conversation_state(
@@ -550,6 +565,17 @@ async def generate_dynamic_reply(
                     last_tool=route_decision.tool_name,
                     pending_question="",
                 )
+                if vector_memory_service is not None and db_conn is not None:
+                    asyncio.create_task(
+                        maybe_store_episodic_memory(
+                            llm=llm,
+                            vector_memory_service=vector_memory_service,
+                            db=db_conn,
+                            user_id=user_id,
+                            user_message=user_text,
+                            bot_reply=reply.strip(),
+                        )
+                    )
                 return ChatReply(
                     content=reply.strip(),
                     intent=route_decision.intent,

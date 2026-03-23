@@ -65,6 +65,7 @@ class ChatCommands(commands.Cog):
             "model_runtime_service": getattr(bot, "model_runtime_service", None),
             "command_help_service": getattr(bot, "command_help_service", None),
             "behavior_rule_service": getattr(bot, "behavior_rule_service", None),
+            "vector_memory_service": getattr(bot, "vector_memory_service", None),
         }
 
     async def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:

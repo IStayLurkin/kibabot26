@@ -19,6 +19,7 @@ from core.config import (
     DISCORD_BOT_TOKEN,
     BOT_PREFIX,
     BOT_TIMEZONE,
+    OLLAMA_BASE_URL,
     SEARXNG_ENABLED,
     SEARXNG_BASE_URL,
     SEARXNG_MAX_RESULTS,
@@ -31,8 +32,10 @@ from services.codegen_service import CodegenService
 from services.command_help_service import CommandHelpService
 from services.hardware_service import HardwareService
 from services.image_service import ImageService
+from services.embedding_service import EmbeddingService
 from services.llm_service import LLMService
 from services.model_storage_service import ModelStorageService
+from services.vector_memory_service import VectorMemoryService
 from services.search_service import SearchService
 from services.music_service import MusicService
 from services.model_runtime_service import ModelRuntimeService
@@ -121,6 +124,7 @@ class ExpenseBot(commands.Bot):
         self.model_storage_service = None
         self.model_runtime_service = None
         self.command_help_service = None
+        self.vector_memory_service = None
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
@@ -184,6 +188,8 @@ class ExpenseBot(commands.Bot):
             behavior_rule_service=self.behavior_rule_service,
             search_service=search_service,
         )
+        embedding_service = EmbeddingService(base_url=OLLAMA_BASE_URL.replace("/v1", ""), model="nomic-embed-text")
+        self.vector_memory_service = VectorMemoryService(embedding_service=embedding_service, top_k=5)
         self.image_service = ImageService(
             performance_tracker=self.performance_tracker,
         )
