@@ -24,3 +24,12 @@ def test_no_match_plain_chat():
 
 def test_detects_share():
     assert extract_image_request("share a cat meme with me") == "cat meme"
+
+def test_detects_let_me_see():
+    assert extract_image_request("let me see a funny cat meme") == "funny cat meme"
+
+def test_detects_can_you_show():
+    assert extract_image_request("can you show me dog memes") == "dog memes"
+
+def test_detects_wanna_see():
+    assert extract_image_request("wanna show me some cat gifs") == "cat gifs"

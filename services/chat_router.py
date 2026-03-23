@@ -142,7 +142,11 @@ def get_rule_based_fallback(
 
 
 _IMAGE_REQUEST = re.compile(
-    r"(?:show|send|post|find|got|share)\s+(?:me\s+)?(?:a\s+|an\s+|any\s+|some\s+)?(.+?)(?:\s+with me)?$",
+    r"(?:"
+    r"(?:show|send|post|find|got|share)\s+(?:me\s+)?"
+    r"|let me (?:see|check out|look at)\s+"
+    r"|(?:can you |wanna |want to )?(?:show|send|share|post)\s+(?:me\s+)?"
+    r")(?:a\s+|an\s+|any\s+|some\s+)?(.+?)(?:\s+with me)?$",
     re.IGNORECASE,
 )
 
