@@ -8,6 +8,9 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **GPU-Accelerated Rendering:** Local image generation using Stable Diffusion XL (SDXL) via the `diffusers` library.
 - **Persistent Memory:** Long-term and short-term memory stored locally to recall user facts and conversation context.
 - **Hardware Optimized:** Specifically tuned for **24GB VRAM** environments and **CUDA 12.8**.
+- **Verified Image Search:** Say "show me cat memes" — bot searches Giphy and your local image folder, scans every result with VirusTotal, and posts the first clean one as a Discord attachment.
+- **Clean Response Pipeline:** Strips hallucinated URLs, fake image descriptions, filler openers/closers, farewell phrases, and emojis from all LLM output.
+- **Hot Update:** `!update` pulls latest code from GitHub and restarts the bot automatically — no terminal needed.
 
 ## Tech Stack
 
@@ -47,11 +50,20 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 
 4. **Configure environment variables:**
 
-   Copy `.env.example` to `.env` and fill in your Discord token and any other values.
+   Copy `.env.example` to `.env` and fill in your values:
 
    ```powershell
    Copy-Item .env.example .env
    ```
+
+   Key variables:
+   | Variable | Description |
+   |---|---|
+   | `DISCORD_BOT_TOKEN` | Your bot token |
+   | `OLLAMA_MODEL` | Ollama model name (default: `dolphin-llama3:latest`) |
+   | `GIPHY_API_KEY` | Giphy API key for image search |
+   | `VIRUSTOTAL_API_KEY` | VirusTotal API key for URL scanning |
+   | `LOCAL_IMAGE_DIR` | Optional local folder of trusted images/GIFs |
 
 5. **Run the bot:**
 

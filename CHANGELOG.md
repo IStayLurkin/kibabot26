@@ -5,6 +5,30 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Response Quality & Image Search Sprint
+
+### New Features
+- **Verified image search** — bot searches Giphy then a local folder when the user explicitly asks to see something ("show me cat memes", "let me see a funny cat gif", etc.). Every Giphy URL is scanned with VirusTotal before being sent. Unsafe results are silently skipped; if all fail, bot says so. Images are sent as Discord file attachments (8 MB cap enforced).
+- **`!update` command** (owner only) — runs `git pull` and restarts the bot via `os.execv()`. Push a fix, type `!update` in Discord, done. No terminal required.
+
+### Response Quality Fixes
+- **Hallucinated URLs stripped** — any sentence containing a URL is dropped from LLM output before it reaches Discord. Prevents the model from sending fake `example.com` image links.
+- **Farewell phrases stripped** — extended filler regex to catch `later alligator`, `see ya`, `catch you later`, `ttyl`, and similar goodbye phrases mid-conversation.
+- **`feel free to keep chatting` caught** — extended filler closer regex to cover `keep chatting` / `chat` variants.
+- **System prompt hardened** — LLM explicitly forbidden from: generating/guessing URLs, describing or captioning images, offering to show images unprompted.
+
+### New Services
+- `services/virustotal_service.py` — async VirusTotal v3 URL scanning (`is_safe(url)`). Submits URL, polls for completion, returns `True` only on 0 malicious + 0 suspicious detections. Fail-safe: returns `False` on any error or missing API key.
+- `services/image_search_service.py` — `search_giphy(topic)`, `search_local(topic)`, `find_verified_image(topic)`. Local file matching handles both space and underscore filename variants.
+
+### Detection
+- `services/chat_router.py` — added `extract_image_request(text)`. Keyword + verb based detection handles natural phrasing: "show me", "send me", "got any", "let me see", "let me another", "can you show", etc.
+
+### Config
+- `core/config.py` — added `VIRUSTOTAL_API_KEY`, `GIPHY_API_KEY`, `LOCAL_IMAGE_DIR`.
+
+---
+
 ## [2026-03-17] — Performance & Feature Sprint
 
 ### Performance
