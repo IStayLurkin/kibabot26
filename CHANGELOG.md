@@ -5,6 +5,13 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Log Truncation Fix
+
+### Bug Fixes
+- **Extended chat log truncation from 300 → 500 chars** — user and bot messages were being cut mid-sentence in the log output. Bumped both `[chat] user` and `[chat] bot` log slices to 500 chars to cover typical reply lengths without flooding logs.
+
+---
+
 ## [2026-03-23] — Chat Context Bug Fix
 
 ### Bug Fixes
