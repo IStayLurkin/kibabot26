@@ -36,6 +36,10 @@ scipy>=1.17.1,<2
 
 # Database
 aiosqlite>=0.21.0,<1
+sqlite-vec>=0.1.7,<1
+
+# HTTP clients
+httpx>=0.28.0,<1
 
 # Voice (Discord)
 PyNaCl>=1.5.0,<2
