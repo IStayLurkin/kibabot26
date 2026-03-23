@@ -33,3 +33,13 @@ def test_detects_can_you_show():
 
 def test_detects_wanna_see():
     assert extract_image_request("wanna show me some cat gifs") == "cat gifs"
+
+def test_detects_let_me_another():
+    result = extract_image_request("let me another funny cat meme you like")
+    assert result is not None
+    assert "cat" in result
+    assert "meme" in result
+
+def test_no_match_how_to():
+    # "show me how to cook" should NOT trigger — no media keyword
+    assert extract_image_request("show me how to cook") is None

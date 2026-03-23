@@ -141,12 +141,8 @@ def get_rule_based_fallback(
     return "I heard you, but I do not know how to respond to that yet. Try `!helpchat` or `!help`."
 
 
-_IMAGE_REQUEST = re.compile(
-    r"(?:"
-    r"(?:show|send|post|find|got|share)\s+(?:me\s+)?"
-    r"|let me (?:see|check out|look at)\s+"
-    r"|(?:can you |wanna |want to )?(?:show|send|share|post)\s+(?:me\s+)?"
-    r")(?:a\s+|an\s+|any\s+|some\s+)?(.+?)(?:\s+with me)?$",
+_IMAGE_REQUEST_VERBS = re.compile(
+    r"\b(?:show|send|post|find|share|see|look at|check out|get|give|got)\b",
     re.IGNORECASE,
 )
 
@@ -155,17 +151,48 @@ _MEDIA_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+_TOPIC_STRIP = re.compile(
+    r"^.*?\b(?:meme|memes|gif|gifs|pic|pics|image|images|photo|photos|video|videos|guide|tutorial)\b",
+    re.IGNORECASE,
+)
+
+_ARTICLE_STRIP = re.compile(
+    r"^(?:a|an|any|some|another|more|the)\s+",
+    re.IGNORECASE,
+)
+
 
 def extract_image_request(text: str) -> str | None:
     """
-    If the message is an explicit request to show/send/post media,
-    return the topic keyword string. Otherwise return None.
+    If the message contains a request verb AND a media keyword, treat it as
+    an image request and return the topic (adjective + media type).
+    e.g. "let me another funny cat meme" -> "funny cat meme"
     """
-    m = _IMAGE_REQUEST.match(text.strip())
-    if not m:
+    t = text.strip()
+    # Must have a media keyword
+    media_match = _MEDIA_KEYWORDS.search(t)
+    if not media_match:
         return None
-    topic = m.group(1).strip()
-    # Must contain a media keyword to avoid false positives like "show me how to cook"
-    if not _MEDIA_KEYWORDS.search(topic):
+    # Must have a request verb somewhere before the media keyword
+    before_media = t[:media_match.start()]
+    if not _IMAGE_REQUEST_VERBS.search(before_media) and not re.search(
+        r"\blet\b|\bwant\b|\bwanna\b|\bcan you\b", before_media, re.IGNORECASE
+    ):
         return None
-    return topic
+    # Extract topic: everything from last article-stripped word before media keyword
+    # through end of the media keyword, plus any trailing adjective context
+    # Simplest: take from the last non-article, non-verb word before media + media keyword + rest
+    topic = t[media_match.start():].strip()
+    # Strip trailing filler like "you like", "i can see", "with me"
+    topic = re.sub(r"\s+(?:you like|you enjoy|i can see|with me|for me)\s*$", "", topic, flags=re.IGNORECASE).strip()
+    # Prepend any adjective words immediately before the media keyword (e.g. "cat", "funny cat")
+    prefix = before_media.strip()
+    prefix = _ARTICLE_STRIP.sub("", prefix).strip()
+    # Only take the last 1-3 words of prefix as context (drop verb phrases)
+    prefix_words = prefix.split()
+    # Drop known verb/filler words from end of prefix
+    _SKIP = {"show", "send", "post", "find", "share", "see", "get", "got", "give", "me", "another", "a", "an", "some", "any", "let", "can", "you", "want", "wanna", "to", "more", "the", "i", "like"}
+    meaningful = [w for w in prefix_words if w.lower() not in _SKIP]
+    if meaningful:
+        topic = " ".join(meaningful[-3:]) + " " + topic
+    return topic.strip() if topic else None
