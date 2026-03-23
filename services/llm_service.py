@@ -337,6 +337,40 @@ class LLMService:
         updated.insert(1, {"role": "system", "content": rules_block})
         return updated
 
+    def _classify_search_need(self, user_message: str) -> list[str]:
+        """Ask the LLM if this message needs web search. Returns list of query strings (max 3), or []."""
+        import json
+        prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a search query classifier. Determine if the user's message requires "
+                    "current, real-world, or recent information to answer accurately.\n"
+                    "If yes: return a JSON array of 1-3 specific search queries (strings) that would help answer it.\n"
+                    "If no: return the JSON value null.\n"
+                    "Return ONLY valid JSON. No explanation. No markdown.\n"
+                    "Examples:\n"
+                    '  "who won the super bowl this year?" -> ["Super Bowl 2026 winner", "Super Bowl LX result"]\n'
+                    '  "what is 2+2?" -> null\n'
+                    '  "hey how are you" -> null\n'
+                    '  "latest news on AI regulation" -> ["AI regulation news 2026", "AI laws passed 2026"]\n'
+                ),
+            },
+            {"role": "user", "content": user_message},
+        ]
+        try:
+            raw = self._complete_messages_sync(prompt, temperature=0.0, max_tokens=150)
+            raw = raw.strip()
+            if raw.lower() == "null":
+                return []
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [q for q in parsed if isinstance(q, str)][:3]
+            return []
+        except Exception as exc:
+            logger.warning("Search classifier failed: %s", exc)
+            return []
+
     def _ollama_client(self) -> OpenAI:
         return OpenAI(
             base_url=OLLAMA_BASE_URL,
