@@ -139,3 +139,29 @@ def get_rule_based_fallback(
         return f"I remember your preference: {remembered_preference}"
 
     return "I heard you, but I do not know how to respond to that yet. Try `!helpchat` or `!help`."
+
+
+_IMAGE_REQUEST = re.compile(
+    r"(?:show|send|post|find|got|share)\s+(?:me\s+)?(?:a\s+|an\s+|any\s+)?(.+?)(?:\s+with me)?$",
+    re.IGNORECASE,
+)
+
+_MEDIA_KEYWORDS = re.compile(
+    r"\b(?:meme|memes|gif|gifs|pic|pics|image|images|photo|photos|video|videos|guide|tutorial)\b",
+    re.IGNORECASE,
+)
+
+
+def extract_image_request(text: str) -> str | None:
+    """
+    If the message is an explicit request to show/send/post media,
+    return the topic keyword string. Otherwise return None.
+    """
+    m = _IMAGE_REQUEST.match(text.strip())
+    if not m:
+        return None
+    topic = m.group(1).strip()
+    # Must contain a media keyword to avoid false positives like "show me how to cook"
+    if not _MEDIA_KEYWORDS.search(topic):
+        return None
+    return topic
