@@ -181,11 +181,12 @@ class CodeExecutionService:
         stderr_text = self._trim_output(stderr_text)
         run_id = uuid.uuid4().hex[:12]
 
+        filename = str(path.relative_to(self.workspace_root)).replace("\\", "/")
         await add_code_run(
             run_id=run_id,
             user_id=user_id,
             channel_id=channel_id,
-            filename=str(path.relative_to(self.workspace_root)).replace("\\", "/"),
+            filename=filename,
             command=" ".join(command),
             exit_code=exit_code,
             duration_ms=duration_ms,

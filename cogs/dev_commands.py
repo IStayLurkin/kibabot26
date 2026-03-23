@@ -90,6 +90,7 @@ class DevCommands(commands.Cog):
         except Exception as exc:
             await ctx.send(f"Git pull failed: `{exc}`")
             return
+        await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     @commands.command()

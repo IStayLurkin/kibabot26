@@ -141,7 +141,7 @@ class HardwareService:
 
         try:
             with urllib.request.urlopen(request, timeout=3) as response:
-                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+                payload = json.loads(response.read().decode("utf-8"))
         except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
             return {
                 "available": False,
@@ -188,7 +188,7 @@ class HardwareService:
         request = urllib.request.Request(url, headers={"User-Agent": "KibaBot/1.0"})
         try:
             with urllib.request.urlopen(request, timeout=3) as response:
-                payload = json.loads(response.read().decode("utf-8", errors="replace"))
+                payload = json.loads(response.read().decode("utf-8"))
                 return payload.get("models", [])
         except Exception as exc:
             logger.debug("Ollama /api/ps failed: %s", exc)
@@ -210,7 +210,7 @@ class HardwareService:
             with urllib.request.urlopen(request, timeout=3) as response:
                 if response.status < 200 or response.status >= 300:
                     return False
-                json.loads(response.read().decode("utf-8", errors="replace"))
+                json.loads(response.read().decode("utf-8"))
                 return True
         except Exception:
             return False

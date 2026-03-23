@@ -1,6 +1,8 @@
 import io
 import os
+import uuid
 import asyncio
+import tempfile
 import time
 import gc
 import torch
@@ -256,7 +258,7 @@ class ChatCommands(commands.Cog):
                 if any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg', '.m4a']):
                     voice_svc = getattr(self.bot, "voice_service", None)
                     if voice_svc:
-                        temp_path = f"temp_{attachment.filename}"
+                        temp_path = os.path.join(tempfile.gettempdir(), f"kiba_{uuid.uuid4().hex}_{os.path.basename(attachment.filename)}")
                         await attachment.save(temp_path)
                         try:
                             transcription = await voice_svc.speech_to_text(temp_path)
@@ -281,7 +283,7 @@ class ChatCommands(commands.Cog):
                             await destination.send(file=discord.File(str(p), filename=p.name))
                         else:
                             # Remote URL — download and send as attachment (8 MB cap)
-                            async with aiohttp.ClientSession() as _sess:
+                            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as _sess:
                                 async with _sess.get(url_or_path) as _resp:
                                     if _resp.status == 200:
                                         data = await _resp.read()

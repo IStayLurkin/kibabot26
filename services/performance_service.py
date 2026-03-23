@@ -105,7 +105,7 @@ class PerformanceTracker:
         seconds = duration_ms / 1000
 
         if severity == "critical_slow":
-            logger.warning("%s: %.1fs", label, seconds)
+            logger.error("%s: %.1fs", label, seconds)
             return
 
         if severity == "slow":
