@@ -23,6 +23,8 @@ from services.llm_service import LLMService
 from services.agent_dispatcher import AgentDispatcher
 from services.chat_service import generate_dynamic_reply
 from services.summary_service import maybe_update_summary
+from services.chat_router import extract_image_request
+from services.image_search_service import find_verified_image
 from core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -265,6 +267,31 @@ class ChatCommands(commands.Cog):
 
         async with destination.typing():
             try:
+                # Image search path — check before LLM
+                image_topic = extract_image_request(content)
+                if image_topic:
+                    url_or_path = await find_verified_image(image_topic)
+                    if url_or_path:
+                        from pathlib import Path as _Path
+                        p = _Path(url_or_path)
+                        if p.exists():
+                            # Local file
+                            await destination.send(file=discord.File(str(p), filename=p.name))
+                        else:
+                            # Remote URL — download and send as attachment
+                            import aiohttp as _aiohttp
+                            async with _aiohttp.ClientSession() as _sess:
+                                async with _sess.get(url_or_path) as _resp:
+                                    if _resp.status == 200:
+                                        data = await _resp.read()
+                                        ext = _Path(url_or_path.split("?")[0]).suffix or ".gif"
+                                        fname = f"kiba_image{ext}"
+                                        await destination.send(file=discord.File(
+                                            fp=__import__("io").BytesIO(data),
+                                            filename=fname
+                                        ))
+                    return
+
                 intent = self.dispatcher.classify_intent(content)
 
                 if intent in ("draw", "sing"):
