@@ -266,7 +266,6 @@ class ChatCommands(commands.Cog):
                             if os.path.exists(temp_path):
                                 os.remove(temp_path)
 
-        await add_chat_message(session_id, "user", content)
         logger.info("[chat] user=%s msg=%r", str(author), content[:300])
 
         async with destination.typing():
@@ -274,6 +273,7 @@ class ChatCommands(commands.Cog):
                 # Image search path — check before LLM
                 image_topic = extract_image_request(content)
                 if image_topic:
+                    await add_chat_message(session_id, "user", content)
                     url_or_path = await find_verified_image(image_topic)
                     if url_or_path:
                         p = Path(url_or_path)
@@ -307,6 +307,7 @@ class ChatCommands(commands.Cog):
 
                 if intent in ("draw", "sing"):
                     # Media path — AgentDispatcher handles VRAM locking and generation
+                    await add_chat_message(session_id, "user", content)
                     response_text, file_path = await self.dispatcher.run(user_id, channel_id, content)
 
                     if response_text:
@@ -334,6 +335,8 @@ class ChatCommands(commands.Cog):
                         services=self._build_services(),
                     )
 
+                    # Store user message and bot reply together after generation
+                    await add_chat_message(session_id, "user", content)
                     if reply.content:
                         await add_chat_message(session_id, "bot", reply.content)
                         logger.info("[chat] bot=%r", reply.content[:300])

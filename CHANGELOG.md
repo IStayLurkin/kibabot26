@@ -5,6 +5,13 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Chat Context Bug Fix
+
+### Bug Fixes
+- **Fixed duplicate user message in LLM context** — `handle_chat_turn` was storing the user message to the DB before calling `generate_dynamic_reply`. Inside `generate_dynamic_reply`, `get_recent_chat_messages` fetched it back as part of history, and then `_build_messages` appended the current user message again. The LLM received two consecutive `user` role entries with the same text, causing it to lose conversational context and respond as if starting a fresh conversation. Fixed by moving `add_chat_message("user", ...)` to after `generate_dynamic_reply` returns for the text chat path. Image search and media paths store the user message immediately (unchanged behavior).
+
+---
+
 ## [2026-03-23] — Web Search, Semantic Memory & Infrastructure Sprint
 
 ### New Features
