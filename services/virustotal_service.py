@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import aiohttp
 from core.config import VIRUSTOTAL_API_KEY
 from core.logging_config import get_logger
@@ -14,7 +13,7 @@ _POLL_DELAY = 3
 async def _submit_url(session: aiohttp.ClientSession, url: str) -> str:
     """Submit URL to VirusTotal, return analysis ID."""
     headers = {"x-apikey": VIRUSTOTAL_API_KEY, "Content-Type": "application/x-www-form-urlencoded"}
-    async with session.post(f"{_VT_BASE}/urls", data=f"url={url}", headers=headers) as resp:
+    async with session.post(f"{_VT_BASE}/urls", data={"url": url}, headers=headers) as resp:
         resp.raise_for_status()
         data = await resp.json()
         return data["data"]["id"]
@@ -31,6 +30,7 @@ async def _poll_result(session: aiohttp.ClientSession, analysis_id: str) -> dict
             if status == "completed":
                 return data
         await asyncio.sleep(_POLL_DELAY)
+    logger.warning("[virustotal] Poll exhausted all %d attempts without completed status for analysis %s", _POLL_ATTEMPTS, analysis_id)
     return {}
 
 

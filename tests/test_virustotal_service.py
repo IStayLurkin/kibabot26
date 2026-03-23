@@ -44,3 +44,13 @@ async def test_is_safe_returns_false_when_no_api_key():
     with patch("services.virustotal_service.VIRUSTOTAL_API_KEY", ""):
         result = await is_safe("https://media.giphy.com/media/abc/giphy.gif")
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_is_safe_returns_false_on_poll_timeout():
+    """Poll timeout (_poll_result returns {}) is treated as unsafe (False)."""
+    with patch("services.virustotal_service.VIRUSTOTAL_API_KEY", "fake_key"), \
+         patch("services.virustotal_service._submit_url", new_callable=AsyncMock, return_value="scan123"), \
+         patch("services.virustotal_service._poll_result", new_callable=AsyncMock, return_value={}):
+        result = await is_safe("https://media.giphy.com/media/abc/giphy.gif")
+    assert result is False
