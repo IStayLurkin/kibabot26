@@ -1,4 +1,5 @@
 from database.db_connection import get_db
+from database.vector_memory_db import init_vector_memory_db
 
 
 async def init_chat_memory_db():
@@ -77,6 +78,7 @@ async def init_chat_memory_db():
         )
     """)
 
+    await init_vector_memory_db(db)
     await db.commit()
 
 
