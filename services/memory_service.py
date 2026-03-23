@@ -182,3 +182,32 @@ async def store_memory_if_found(llm, user_id: str, content: str):
         return key, value
 
     return await maybe_extract_ai_memory(llm, user_id, content)
+
+
+async def maybe_store_episodic_memory(
+    llm,
+    vector_memory_service,
+    db,
+    user_id: str,
+    user_message: str,
+    bot_reply: str,
+) -> None:
+    """
+    After a chat turn, ask the LLM if anything is worth storing as an episodic memory.
+    Runs as a background task — never raises.
+    """
+    if len(user_message.split()) < 3:
+        return
+    try:
+        result = await llm.extract_episodic_memory(
+            user_message=user_message,
+            bot_reply=bot_reply,
+        )
+        if not isinstance(result, dict) or not result.get("should_store"):
+            return
+        content = str(result.get("content", "")).strip()
+        if not content:
+            return
+        await vector_memory_service.store(db, user_id=user_id, content=content)
+    except Exception as exc:
+        logger.warning("[episodic_memory] Extraction failed: %s", exc)
