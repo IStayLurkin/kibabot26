@@ -24,6 +24,9 @@ def _unpack_embedding(blob: bytes) -> list[float]:
     return list(struct.unpack(f"{n}f", blob))
 
 
+SIMILARITY_THRESHOLD = 0.3
+
+
 class VectorMemoryService:
     def __init__(self, embedding_service, top_k: int = 5):
         self._embed = embedding_service
@@ -37,11 +40,12 @@ class VectorMemoryService:
                 logger.warning("[vector_memory] Skipping store — embed returned empty for user %s", user_id)
                 return
             await store_vector_memory(db, user_id=user_id, content=content, embedding=embedding)
+            logger.info("[vector_memory] Stored memory for user %s: %r", user_id, content[:120])
         except Exception as exc:
             logger.warning("[vector_memory] Store failed for user %s: %s", user_id, exc)
 
     async def retrieve(self, db, user_id: str, query: str) -> list[str]:
-        """Embed query and return top-K most similar memory contents. Returns [] on failure."""
+        """Embed query and return top-K most similar memory contents above threshold. Returns [] on failure."""
         try:
             query_vec = await self._embed.embed(query)
             if not query_vec:
@@ -54,9 +58,12 @@ class VectorMemoryService:
                 blob = row["embedding"]
                 vec = _unpack_embedding(blob)
                 score = _cosine_similarity(query_vec, vec)
-                scored.append((score, row["content"]))
+                if score >= SIMILARITY_THRESHOLD:
+                    scored.append((score, row["content"]))
             scored.sort(key=lambda x: x[0], reverse=True)
-            return [content for _, content in scored[: self._top_k]]
+            results = [content for _, content in scored[: self._top_k]]
+            logger.info("[vector_memory] Retrieved %d/%d memories for user %s (threshold=%.2f)", len(results), len(rows), user_id, SIMILARITY_THRESHOLD)
+            return results
         except Exception as exc:
             logger.warning("[vector_memory] Retrieval failed: %s", exc)
             return []

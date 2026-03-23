@@ -5,6 +5,17 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Capabilities Trigger & RAG Improvements
+
+### Bug Fixes
+- **Capabilities trigger now matches "abilities"** — `matches_natural_language_help` and the `chat_service` routing both now catch "abilities" / "what abilities do you have" / "what are your abilities" variants, in addition to existing "capabilities" / "what can you do" triggers. Typos still fall through to the LLM but correctly-spelled ability queries now always hit `build_capabilities_summary`.
+
+### Improvements
+- **RAG similarity threshold** — `VectorMemoryService.retrieve` now filters results below `0.3` cosine similarity before returning. Previously all stored memories were injected into the prompt regardless of relevance; now only genuinely related memories surface.
+- **RAG logging** — `store` and `retrieve` now emit `INFO` log lines showing what was stored and how many memories were retrieved vs total stored, making it easy to verify the RAG pipeline is active.
+
+---
+
 ## [2026-03-23] — Log Truncation Fix
 
 ### Bug Fixes

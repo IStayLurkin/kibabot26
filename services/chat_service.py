@@ -367,7 +367,7 @@ async def generate_dynamic_reply(
 
         if command_help_service is not None and bot is not None and command_help_service.matches_natural_language_help(user_text):
             lowered = user_text.strip().lower()
-            if "what can you do" in lowered or "what capabilities do you have" in lowered or lowered == "capabilities":
+            if "what can you do" in lowered or "capabilities" in lowered or "abilities" in lowered:
                 hidden_sections = set()
                 if any("talk about expenses unless asked" in rule.lower() for rule in behavior_rules):
                     hidden_sections.update({"Expenses", "Budgets"})
