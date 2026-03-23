@@ -1,4 +1,6 @@
 import os
+import sys
+import subprocess
 import discord
 from discord.ext import commands
 
@@ -74,6 +76,24 @@ class DevCommands(commands.Cog):
 
     @commands.command()
     @commands.is_owner()
+    async def update(self, ctx):
+        """Pull latest code from git and restart the bot."""
+        try:
+            result = subprocess.run(
+                ["git", "pull"],
+                capture_output=True,
+                text=True,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            )
+            output = (result.stdout + result.stderr).strip() or "No output."
+            await ctx.send(f"```{output}```\nRestarting...")
+        except Exception as exc:
+            await ctx.send(f"Git pull failed: `{exc}`")
+            return
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    @commands.command()
+    @commands.is_owner()
     async def reloadchat(self, ctx):
         try:
             await self.bot.reload_extension("cogs.chat_commands")
@@ -85,6 +105,7 @@ class DevCommands(commands.Cog):
     @reloadall.error
     @whichmodel.error
     @cogs.error
+    @update.error
     @reloadchat.error
     async def dev_command_error(self, ctx, error):
         if isinstance(error, commands.NotOwner):
