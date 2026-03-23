@@ -8,6 +8,8 @@ os.environ['OLLAMA_MODELS'] = 'G:/ollamamodels'
 # ----------------------------------
 
 import asyncio
+import subprocess
+import sys
 
 import time
 import discord
@@ -60,6 +62,29 @@ intents.members = True     # Required for the 2026 handshake
 intents.presences = True   # Required to show as "Online" (Green Circle)
 
 
+async def _ollama_is_running() -> bool:
+    """Return True if ollama is already responding on its API port."""
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection("127.0.0.1", 11434), timeout=1.0
+        )
+        writer.close()
+        await writer.wait_closed()
+        return True
+    except Exception:
+        return False
+
+
+async def _wait_for_ollama(timeout: float = 30.0) -> bool:
+    """Poll until ollama is ready or timeout expires. Returns True if ready."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    while asyncio.get_event_loop().time() < deadline:
+        if await _ollama_is_running():
+            return True
+        await asyncio.sleep(1.0)
+    return False
+
+
 async def send_long_message(destination, text):
     if not text:
         return
@@ -82,6 +107,7 @@ class ExpenseBot(commands.Bot):
         self.generating_count = 0
         self.generating_lock = asyncio.Lock()
         
+        self._ollama_process = None
         self.llm_service = None
         self.image_service = None
         self.voice_service = None
@@ -118,6 +144,22 @@ class ExpenseBot(commands.Bot):
            
 
     async def setup_hook(self):
+        # Start ollama serve if not already running
+        if not await _ollama_is_running():
+            logger.info("[ollama] Not running — launching ollama serve...")
+            self._ollama_process = subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            ready = await _wait_for_ollama(timeout=30.0)
+            if ready:
+                logger.info("[ollama] Ready (pid %d)", self._ollama_process.pid)
+            else:
+                logger.warning("[ollama] Did not become ready within 30s — LLM calls may fail")
+        else:
+            logger.info("[ollama] Already running — skipping launch")
+
         async with self.performance_tracker.track_service_call("startup.init_db"):
             await init_db()
 
@@ -206,6 +248,13 @@ class ExpenseBot(commands.Bot):
             await close_db()
         except Exception as exc:
             logger.warning("Error closing DB connection: %s", exc)
+        if self._ollama_process is not None:
+            logger.info("[ollama] Terminating ollama serve (pid %d)...", self._ollama_process.pid)
+            self._ollama_process.terminate()
+            try:
+                self._ollama_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._ollama_process.kill()
         await super().close()
 
     def print_startup_banner(self):
