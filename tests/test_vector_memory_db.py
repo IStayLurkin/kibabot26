@@ -3,7 +3,7 @@ import pytest_asyncio
 import aiosqlite
 import sqlite_vec
 import struct
-from database.vector_memory_db import init_vector_memory_db, store_vector_memory, get_all_vector_memories
+from database.vector_memory_db import init_vector_memory_db, store_vector_memory, get_all_vector_memories, delete_vector_memories
 
 
 @pytest_asyncio.fixture
@@ -46,3 +46,16 @@ async def test_memories_isolated_by_user(db):
     assert len(rows_a) == 1
     assert len(rows_b) == 1
     assert rows_a[0]["content"] == "User A memory"
+
+
+@pytest.mark.asyncio
+async def test_delete_vector_memories(db):
+    embedding = [0.1] * 768
+    await store_vector_memory(db, user_id="123", content="Memory to delete", embedding=embedding)
+    rows_before = await get_all_vector_memories(db, user_id="123")
+    assert len(rows_before) == 1
+
+    await delete_vector_memories(db, user_id="123")
+
+    rows_after = await get_all_vector_memories(db, user_id="123")
+    assert len(rows_after) == 0

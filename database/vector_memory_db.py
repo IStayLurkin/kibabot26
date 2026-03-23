@@ -42,6 +42,13 @@ async def store_vector_memory(
     embedding: list[float],
 ) -> None:
     """Store a memory with its embedding blob."""
+    if len(embedding) != EMBEDDING_DIM:
+        logger.warning(
+            "store_vector_memory: expected embedding dim %d, got %d — skipping store",
+            EMBEDDING_DIM,
+            len(embedding),
+        )
+        return
     blob = _pack_embedding(embedding)
     await db.execute(
         "INSERT INTO vector_memories (user_id, content, embedding) VALUES (?, ?, ?)",
@@ -54,7 +61,10 @@ async def get_all_vector_memories(
     db: aiosqlite.Connection,
     user_id: str,
 ) -> list[aiosqlite.Row]:
-    """Return all stored memories for a user (content + embedding blob)."""
+    """Return all stored memories for a user (content + embedding blob).
+
+    Caller must have set conn.row_factory = aiosqlite.Row for column name access to work.
+    """
     cursor = await db.execute(
         "SELECT id, content, embedding, created_at FROM vector_memories WHERE user_id = ? ORDER BY id DESC",
         (user_id,),
