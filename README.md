@@ -6,11 +6,13 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 
 - **Unrestricted Local Intelligence:** Powered by a custom Ollama `kiba` model (Dolphin 3.0 base).
 - **GPU-Accelerated Rendering:** Local image generation using Stable Diffusion XL (SDXL) via the `diffusers` library.
-- **Persistent Memory:** Long-term and short-term memory stored locally to recall user facts and conversation context.
+- **Persistent Memory:** Long-term and short-term memory stored locally — structured KV facts plus semantic/episodic vector memory (sqlite-vec + nomic-embed-text). Top-5 relevant past memories injected into every reply.
+- **Web Search (RAG):** Automatically searches the web via a local SearXNG instance when a message needs live information. Fast keyword pre-filter skips the classifier for casual chat; results injected as a grounded context block.
 - **Hardware Optimized:** Specifically tuned for **24GB VRAM** environments and **CUDA 12.8**.
 - **Verified Image Search:** Say "show me cat memes" — bot searches Giphy and your local image folder, scans every result with VirusTotal, and posts the first clean one as a Discord attachment.
 - **Clean Response Pipeline:** Strips hallucinated URLs, fake image descriptions, filler openers/closers, farewell phrases, and emojis from all LLM output.
 - **Hot Update:** `!update` pulls latest code from GitHub and restarts the bot automatically — no terminal needed.
+- **Ollama Auto-Launch:** Bot starts `ollama serve` automatically on startup if it isn't already running.
 
 ## Tech Stack
 
@@ -64,6 +66,9 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    | `GIPHY_API_KEY` | Giphy API key for image search |
    | `VIRUSTOTAL_API_KEY` | VirusTotal API key for URL scanning |
    | `LOCAL_IMAGE_DIR` | Optional local folder of trusted images/GIFs |
+   | `SEARXNG_ENABLED` | `true`/`false` — enable web search (default: `false`) |
+   | `SEARXNG_BASE_URL` | SearXNG instance URL (default: `http://localhost:8080`) |
+   | `SEARXNG_MAX_RESULTS` | Max results per search query (default: `5`) |
 
 5. **Run the bot:**
 

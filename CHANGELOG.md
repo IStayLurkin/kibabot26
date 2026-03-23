@@ -5,6 +5,38 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Web Search, Semantic Memory & Infrastructure Sprint
+
+### New Features
+- **Web search (SearXNG RAG)** — bot automatically decides when a message needs a live web search. A fast regex pre-filter skips the classifier for casual chat (~zero overhead). When needed, an LLM classifier generates up to 3 targeted queries, fires them in parallel against a local SearXNG instance, and injects the results as a `[SEARCH RESULTS]` block into the system prompt before generating the reply.
+- **Semantic/episodic memory (Layer 1 RAG)** — every conversation turn is now semantically indexed. On each message, the user's text is embedded via `nomic-embed-text` (Ollama), and the top-5 most relevant past memories are retrieved by cosine similarity and injected as a `[RELEVANT MEMORIES]` block. After each reply, a background task asks the LLM what's worth remembering and stores it as a vector embedding. Runs fully local — no external servers. Existing KV fact store unchanged.
+- **Ollama auto-launch** — `bot.py` checks if `ollama serve` is running on startup and launches it automatically if not. Polls up to 30s for readiness. Terminates the managed process cleanly on bot shutdown.
+
+### New Services
+- `services/search_service.py` — `SearchService` with `search()` and `search_many()` (parallel asyncio.gather). Wraps SearXNG JSON API.
+- `services/embedding_service.py` — `EmbeddingService` wrapping Ollama `/api/embeddings` via httpx. `embed()` and `embed_many()`.
+- `services/vector_memory_service.py` — `VectorMemoryService` with `store()` (embed + write) and `retrieve()` (embed + cosine rank + top-K). Pure Python cosine similarity, no external vector DB.
+
+### New DB
+- `database/vector_memory_db.py` — `vector_memories` table (`user_id`, `content TEXT`, `embedding BLOB`, `created_at`). Helpers: `store_vector_memory`, `get_all_vector_memories`, `delete_vector_memories`. Embedding dimension guard (768-dim, nomic-embed-text).
+- `database/db_connection.py` — loads `sqlite-vec` extension on connection open.
+
+### LLMService Extensions
+- `_classify_search_need(message)` — LLM classifier returning up to 3 search query strings.
+- `_message_needs_search(message)` — module-level regex pre-filter; skips classifier entirely for casual chat.
+- `extract_episodic_memory(user_message, bot_reply)` — LLM decides what's worth storing; returns `{should_store, content}`.
+- `_build_messages` now accepts `search_results` and `relevant_memories`; injects both as blocks in the system prompt.
+- `generate_agent_reply` now accepts and passes through `relevant_memories`.
+
+### Config
+- `core/config.py` — added `SEARXNG_ENABLED`, `SEARXNG_BASE_URL`, `SEARXNG_MAX_RESULTS`.
+- `.env` — added SearXNG defaults (gitignored).
+
+### Infrastructure
+- `searxng_config/settings.yml` — Docker volume config for SearXNG: JSON format enabled, binds to `0.0.0.0:8080`, rate limiter off.
+
+---
+
 ## [2026-03-23] — Response Quality & Image Search Sprint
 
 ### New Features
