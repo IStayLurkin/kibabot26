@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from services.image_search_service import search_giphy, search_local, find_verified_image
 
 
@@ -79,3 +79,14 @@ async def test_find_verified_image_returns_none_when_all_unsafe():
          patch("services.image_search_service.is_safe", new_callable=AsyncMock, return_value=False):
         result = await find_verified_image("cat")
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_find_verified_image_returns_local_when_giphy_empty(tmp_path):
+    """When Giphy returns nothing, local file fallback is returned."""
+    local_file = tmp_path / "cat_funny.gif"
+    local_file.touch()
+    with patch("services.image_search_service.search_giphy", new_callable=AsyncMock, return_value=[]), \
+         patch("services.image_search_service.search_local", return_value=[str(local_file)]):
+        result = await find_verified_image("cat")
+    assert result == str(local_file)
