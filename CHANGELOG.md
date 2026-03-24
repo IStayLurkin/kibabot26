@@ -5,6 +5,19 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-23] — Memory Management & Summary Fix
+
+### New Features
+- **`!forgetall <user_id>` command (owner only)** — full memory wipe for a user: clears chat history, conversation summary, KV facts, and RAG/vector memory. Complements `!forget` which only clears session-scoped memory.
+
+### Bug Fixes
+- **Conversation summary no longer includes bot capability descriptions** — the summary LLM prompt now explicitly instructs the model to focus only on facts about the user, preventing lines like "I can chat, joke, answer questions" from leaking into user memory summaries.
+
+### Documentation
+- **Commands section added to README** — documents all chat, expense, and admin commands with access levels.
+
+---
+
 ## [2026-03-23] — Capabilities Trigger & RAG Improvements
 
 ### Bug Fixes

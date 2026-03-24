@@ -78,6 +78,32 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 
    This checks Ollama is running first, then launches the bot and tees output to `bot.log`.
 
+## Commands
+
+### Chat & Memory
+
+| Command | Access | Description |
+|---|---|---|
+| `!forget` | Everyone | Clears your chat history, conversation summary, and KV memory in this channel |
+| `!forgetall <user_id>` | Owner only | Full memory wipe for a user — chat history, summary, KV facts, and RAG/vector memory |
+| `!purge` | Owner only | Wipes all chat history for every user in the current channel |
+
+### Expenses
+
+| Command | Access | Description |
+|---|---|---|
+| `!clear yes` | Everyone | Clears all expenses |
+| `!export` | Everyone | Exports expenses to a file |
+| `!import_expenses` | Everyone | Imports expenses from a file |
+
+### Admin
+
+| Command | Access | Description |
+|---|---|---|
+| `!update` | Owner only | Pulls latest code from GitHub and restarts the bot |
+| `!allow [channel]` | Owner only | Adds a channel to Kiba's allowed chat list |
+| `!models` | Everyone | Shows which AI models are currently loaded in VRAM |
+
 ## Hardware Requirements
 
 - **Minimum:** 12 GB VRAM

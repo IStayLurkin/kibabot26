@@ -824,8 +824,9 @@ class LLMService:
             {
                 "role": "system",
                 "content": (
-                    "You create short conversation summaries for future context. "
-                    "Keep important facts, preferences, ongoing topics, goals, and unresolved questions. "
+                    "You create short summaries of what you have learned about the USER from the conversation. "
+                    "Focus only on facts, preferences, goals, habits, and unresolved questions about the user. "
+                    "Do NOT describe the assistant's capabilities or what the assistant said it can do. "
                     "Be concise and useful."
                 ),
             },
