@@ -135,7 +135,7 @@ _FILLER_SENTENCE_MARKERS = re.compile(
 )
 
 _FILLER_OPENING = re.compile(
-    r"^(?:Hello|Hi|Hey|Greetings|Got it|Great|I see|Understood|Noted|Absolutely|Of course|Certainly|Sure enough|Sure thing)[!.,]?\s*",
+    r"^(?:Greetings|Got it|Great|I see|Understood|Noted|Absolutely|Of course|Certainly|Sure enough|Sure thing)[!.,]?\s*",
     re.IGNORECASE,
 )
 
