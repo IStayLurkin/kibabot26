@@ -52,7 +52,6 @@ class CogVideoService:
         self._purge_vram()
         logger.info("[cogvideo] Loading CogVideoX-%s...", model_size)
         self.pipeline = CogVideoXPipeline.from_pretrained(repo, torch_dtype=torch.bfloat16)
-        self.pipeline.enable_model_cpu_offload()
         self.pipeline.enable_sequential_cpu_offload()
         self.current_model = model_size
         logger.info("[cogvideo] CogVideoX-%s loaded.", model_size)
