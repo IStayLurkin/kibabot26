@@ -29,6 +29,7 @@ discord.py>=2.7.1,<3
 # Media Processing
 opencv-python>=4.13.0,<5
 Pillow>=12.1.1,<13
+imageio[ffmpeg]>=2.37.0,<3
 
 # Audio / Speech
 faster-whisper>=1.1.0,<2
