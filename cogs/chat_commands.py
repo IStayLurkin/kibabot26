@@ -449,18 +449,22 @@ class ChatCommands(commands.Cog):
 
     @commands.command(name="forgetall")
     @commands.is_owner()
-    async def forget_all(self, ctx, user_id: str):
-        """[Owner only] Wipes all memory (chat history, summary, key-value, and vector/RAG) for a user."""
+    async def forget_all(self, ctx, target: discord.Member | None = None):
+        """[Owner only] Wipes all memory (chat history, summary, key-value, and vector/RAG) for a user. Usage: !forgetall @user"""
         from database.chat_memory import delete_user_history
         from database.vector_memory_db import delete_vector_memories
         from database.db_connection import get_db
+        if target is None:
+            await ctx.send("Usage: `!forgetall @user`")
+            return
+        user_id = str(target.id)
         channel_id = str(ctx.channel.id)
         await delete_user_history(user_id, channel_id)
         db = await get_db()
         await delete_vector_memories(db, user_id)
         embed = discord.Embed(
             title="🧹 Full Memory Wipe",
-            description=f"All memory (chat history, summary, and RAG) for user `{user_id}` has been deleted.",
+            description=f"All memory (chat history, summary, and RAG) for {target.mention} has been deleted.",
             color=discord.Color.dark_red(),
         )
         await ctx.send(embed=embed)

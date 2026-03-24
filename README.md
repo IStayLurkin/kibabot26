@@ -85,7 +85,7 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 | Command | Access | Description |
 |---|---|---|
 | `!forget` | Everyone | Clears your chat history, conversation summary, and KV memory in this channel |
-| `!forgetall <user_id>` | Owner only | Full memory wipe for a user — chat history, summary, KV facts, and RAG/vector memory |
+| `!forgetall @user` | Owner only | Full memory wipe for a user — chat history, summary, KV facts, and RAG/vector memory |
 | `!purge` | Owner only | Wipes all chat history for every user in the current channel |
 
 ### Expenses
