@@ -44,6 +44,9 @@ from services.performance_service import PerformanceTracker
 from services.song_session_service import SongSessionService
 from services.video_service import VideoService
 from services.voice_service import VoiceService
+from services.cogvideo_service import CogVideoService
+from services.animatediff_service import AnimateDiffService
+from services.wan_service import WanService
 from tasks.task_manager import TaskManager
 
 
@@ -125,6 +128,9 @@ class ExpenseBot(commands.Bot):
         self.model_runtime_service = None
         self.command_help_service = None
         self.vector_memory_service = None
+        self.cogvideo_service = None
+        self.animatediff_service = None
+        self.wan_service = None
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
@@ -202,6 +208,9 @@ class ExpenseBot(commands.Bot):
             llm_service=self.llm_service,
             performance_tracker=self.performance_tracker,
         )
+        self.cogvideo_service = CogVideoService()
+        self.animatediff_service = AnimateDiffService()
+        self.wan_service = WanService(runtime_service=self.model_runtime_service)
         self.music_service = MusicService(
             performance_tracker=self.performance_tracker,
             runtime_service=self.model_runtime_service,
@@ -230,6 +239,7 @@ class ExpenseBot(commands.Bot):
             "cogs.agent_commands",
             "cogs.runtime_commands",
             "cogs.code_commands",
+            "cogs.video_commands",
             "tasks.vram_guard", # Essential VRAM monitoring task
         ]
 
