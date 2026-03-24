@@ -16,49 +16,7 @@ class VideoService:
         self.performance_tracker = performance_tracker
 
     async def generate_video(self, prompt: str) -> str:
-        started_at = time.perf_counter()
-        try:
-            logger.info("Video generation requested: %s", prompt)
-            if self.llm_service is None:
-                raise RuntimeError("Video service is not configured with a video-capable provider.")
-
-            last_error: Exception | None = None
-            for method_name in ("generate_video", "video", "create_video"):
-                method = getattr(self.llm_service, method_name, None)
-                if method is None:
-                    continue
-
-                try:
-                    result = await method(prompt=prompt)
-                    return self._normalize_result(result)
-                except TypeError as exc:
-                    last_error = exc
-                    try:
-                        result = await method(prompt)
-                        return self._normalize_result(result)
-                    except Exception as inner_exc:
-                        last_error = inner_exc
-                        if is_moderation_error(inner_exc):
-                            logger.warning("Video prompt blocked via %s", method_name)
-                        else:
-                            logger.exception("Video generation failed via %s", method_name)
-                except Exception as exc:
-                    last_error = exc
-                    if is_moderation_error(exc):
-                        logger.warning("Video prompt blocked via %s", method_name)
-                    else:
-                        logger.exception("Video generation failed via %s", method_name)
-
-            if last_error is not None:
-                raise RuntimeError(format_media_error(last_error, "video", MEDIA_SAFETY_MODE)) from last_error
-
-            raise RuntimeError("Video generation is not available on the current llm_service.")
-        finally:
-            if self.performance_tracker is not None:
-                self.performance_tracker.record_service_call(
-                    "video.generate_video",
-                    (time.perf_counter() - started_at) * 1000,
-                )
+        raise NotImplementedError("Video generation is not yet available. No backend is configured.")
     def _normalize_result(self, result: Any) -> str:
         if isinstance(result, str):
             return result

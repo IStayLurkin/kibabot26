@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Optional
 
 try:
-    from diffusers import StableAudioProjectionPipeline
+    from diffusers import StableAudioPipeline
 except ImportError:
-    StableAudioProjectionPipeline = None
+    StableAudioPipeline = None
 
 from core.config import (
     MUSIC_DEFAULT_QUALITY,
@@ -122,18 +122,18 @@ class MusicService:
         logger.debug("Studio Config Updated: %s BPM | %s | %s", self.bpm, self.voice_style, self.vocal_mode)
 
     def _generate_melody_local(self, prompt: str, filepath: str) -> str:
-        if StableAudioProjectionPipeline is None:
-            logger.error("StableAudioProjectionPipeline not available. Check diffusers install.")
+        if StableAudioPipeline is None:
+            logger.error("StableAudioPipeline not available. Check diffusers install.")
             return ""
         if self.active_model_type != "stable-audio":
-            self.pipeline = StableAudioProjectionPipeline.from_pretrained(
+            self.pipeline = StableAudioPipeline.from_pretrained(
                 "stabilityai/stable-audio-open-1.0",
                 torch_dtype=torch.float16
             )
             self.pipeline.to(self.device)
             self.active_model_type = "stable-audio"
 
-        audio = self.pipeline(prompt, steps=100, seconds_total=15).audios[0]
+        audio = self.pipeline(prompt, num_inference_steps=100, audio_end_in_s=15).audios[0]
         self._save_audio(audio, filepath)
         return filepath
 
@@ -163,8 +163,9 @@ class MusicService:
                 lf.write(lyrics_text)
                 lyrics_file = lf.name
 
+            venv_python = str(Path(__file__).resolve().parents[1] / ".venv" / "Scripts" / "python.exe")
             cmd = [
-                "python", "infer.py",
+                venv_python, "infer.py",
                 "--cuda_idx", "0",
                 "--stage1_model", YUE_STAGE1_MODEL,
                 "--stage2_model", YUE_STAGE2_MODEL,
