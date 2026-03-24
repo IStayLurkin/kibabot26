@@ -78,10 +78,6 @@ class ImageService:
         self.pipeline = StableDiffusionXLPipeline.from_pretrained(
             SDXL_REPO, torch_dtype=torch.float16, variant="fp16", use_safetensors=True
         ).to("cuda")
-        # Cast VAE to float32 once at load time to suppress FutureWarning and avoid
-        # per-generation type conversion which temporarily doubles VAE VRAM usage.
-        if hasattr(self.pipeline, "vae"):
-            self.pipeline.vae.to(torch.float32)
         self.current_engine = "SDXL"
 
     async def generate_image(self, prompt: str, progress_callback=None) -> Optional[str]:

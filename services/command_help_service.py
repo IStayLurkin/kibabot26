@@ -153,6 +153,10 @@ class CommandHelpService:
             "what are your capabilities",
             "show commands",
             "list commands",
+            "list all your commands",
+            "list all commands",
+            "what are your commands",
+            "show me your commands",
             "help",
         )
         return lowered in triggers or any(trigger in lowered for trigger in triggers[:-1])

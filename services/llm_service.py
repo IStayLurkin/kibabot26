@@ -419,9 +419,11 @@ class LLMService:
             {
                 "role": "system",
                 "content": (
-                    "You are a memory curator. Given a conversation turn, decide if it contains "
-                    "a personal fact, preference, project, or ongoing context about the user that would "
+                    "You are a memory curator. Given a conversation turn, decide if the USER'S message "
+                    "contains a personal fact, preference, project, or ongoing context about the USER that would "
                     "be useful to remember in future conversations.\n"
+                    "IMPORTANT: Only store facts the USER explicitly stated. Never store facts from the bot's reply. "
+                    "Never attribute the bot's opinions, hobbies, or activities to the user.\n"
                     "If yes: return JSON {\"should_store\": true, \"content\": \"<one sentence summary of the fact>\"}\n"
                     "If no: return JSON {\"should_store\": false, \"content\": \"\"}\n"
                     "Return ONLY valid JSON. No explanation. No markdown.\n"
@@ -429,6 +431,7 @@ class LLMService:
                     "  User: 'I'm building a Discord bot in Python' -> {\"should_store\": true, \"content\": \"The user is building a Discord bot in Python\"}\n"
                     "  User: 'hey what's up' -> {\"should_store\": false, \"content\": \"\"}\n"
                     "  User: 'I prefer dark mode always' -> {\"should_store\": true, \"content\": \"The user prefers dark mode\"}\n"
+                    "  User: 'na your turn' Bot: 'I enjoy Sudoku and The Mars Volta' -> {\"should_store\": false, \"content\": \"\"}\n"
                 ),
             },
             {"role": "user", "content": f"User said: {user_message}\nBot replied: {bot_reply}"},
