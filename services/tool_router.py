@@ -151,7 +151,7 @@ class ToolRouter:
         return RouteDecision(
             intent=INTENT_QUESTION_ANSWERING,
             confidence=0.65,
-            requires_agent="?" not in lowered and len(lowered.split()) > 10,
+            requires_agent=False,
             should_ask_clarifying_question=False,
         )
 
