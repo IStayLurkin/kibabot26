@@ -80,7 +80,7 @@ class AgentDispatcher:
 
         return "chat"
 
-    def router_node(self, state: AgentState):
+    async def router_node(self, state: AgentState):
         next_step = self.classify_intent(state["messages"][-1])
         return {**state, "next_step": next_step}
 
