@@ -1,3 +1,5 @@
+import asyncio
+
 from discord.ext import tasks
 
 from core.logging_config import get_logger
@@ -16,7 +18,11 @@ class HealthTasks:
             self.bot_health_check.start()
 
         if self.loop_monitor_task is None or self.loop_monitor_task.done():
-            self.loop_monitor_task = self.bot.loop.create_task(
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.get_event_loop()
+            self.loop_monitor_task = loop.create_task(
                 monitor_event_loop(self.bot.performance_tracker)
             )
 
