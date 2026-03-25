@@ -43,6 +43,7 @@ class MediaCommands(commands.Cog):
         )
 
     @commands.command(name="image", aliases=["img"])
+    @commands.cooldown(1, 30, commands.BucketType.user)
     async def image_command(self, ctx: commands.Context, *, prompt: str) -> None:
         if not IMAGE_ENABLED:
             await ctx.send("Image generation is disabled.")
@@ -170,6 +171,11 @@ class MediaCommands(commands.Cog):
                     await ctx.send("❌ Song generation failed. Check VRAM availability and YuE repo path.")
             except Exception as exc:
                 await ctx.send(f"❌ Song generation failed: {exc}")
+
+    @image_command.error
+    async def image_cooldown_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"⏳ Cooldown — try again in {error.retry_after:.0f}s.")
 
 
 async def setup(bot: commands.Bot) -> None:
