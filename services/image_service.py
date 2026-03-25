@@ -33,6 +33,7 @@ class ImageService:
         self._last_activity = 0
         self._unload_task = None
         self._generation_lock = asyncio.Lock()
+        self.last_update_time: float = 0.0
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _get_vram_usage(self) -> int:
@@ -94,51 +95,47 @@ class ImageService:
         try:
             loop = asyncio.get_running_loop()
             async with self._generation_lock:
-                return await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_sync, prompt, filepath, mode, callback)
+                return await loop.run_in_executor(
+                    HEAVY_EXECUTOR,
+                    self._generate_sync,
+                    prompt, filepath, mode, callback, loop
+                )
         except Exception as e:
             logger.error("%s generation failed: %s", mode, e)
             return None
 
-    def _generate_sync(self, prompt, filepath, mode, callback):
-            try: 
-                main_loop = asyncio.get_event_loop()
-            except Exception:
-                main_loop = None
+    def _generate_sync(self, prompt, filepath, mode, callback, main_loop=None):
+        if mode == "FLUX":
+            self._load_flux()
+            steps = 14
+        else:
+            self._load_sdxl()
+            steps = 30
 
-            if mode == "FLUX":
-                self._load_flux()
-                steps = 14
-            else:
-                self._load_sdxl()
-                steps = 30
+        def pipe_callback(pipe, step, timestep, callback_kwargs):
+            if callback:
+                now = time.time()
+                # Throttles updates to prevent Discord Rate Limit (429) errors
+                if now - self.last_update_time >= 1.0 or step == steps:
+                    percent = int((step / steps) * 100)
+                    vram = round(self._get_vram_usage() / 1024, 1)
+                    callback(percent, vram)
+                    self.last_update_time = now
+            return callback_kwargs
 
-            # THREAD-SAFE RATE LIMITING: Only update Discord once per second
-            self.last_update_time = 0 
+        image = self.pipeline(
+            prompt=prompt,
+            num_inference_steps=steps,
+            callback_on_step_end=pipe_callback,
+            height=1024,
+            width=1024
+        ).images[0]
 
-            def pipe_callback(pipe, step, timestep, callback_kwargs):
-                if callback:
-                    now = time.time()
-                    # Throttles updates to prevent Discord Rate Limit (429) errors
-                    if now - self.last_update_time >= 1.0 or step == steps:
-                        percent = int((step / steps) * 100)
-                        vram = round(self._get_vram_usage() / 1024, 1)
-                        callback(percent, vram)
-                        self.last_update_time = now
-                return callback_kwargs
+        image.save(filepath)
+        if main_loop:
+            main_loop.call_soon_threadsafe(self._update_activity)
 
-            image = self.pipeline(
-                prompt=prompt, 
-                num_inference_steps=steps,
-                callback_on_step_end=pipe_callback,
-                height=1024, 
-                width=1024
-            ).images[0]
-            
-            image.save(filepath)
-            if main_loop: 
-                main_loop.call_soon_threadsafe(self._update_activity)
-                
-            return filepath
+        return filepath
 
     def _update_activity(self):
         self._last_activity = time.time()
