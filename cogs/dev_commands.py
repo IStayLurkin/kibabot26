@@ -86,10 +86,15 @@ class DevCommands(commands.Cog):
                 cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             )
             output = (result.stdout + result.stderr).strip() or "No output."
-            await ctx.send(f"```{output}```\nRestarting...")
         except Exception as exc:
             await ctx.send(f"Git pull failed: `{exc}`")
             return
+
+        if result.returncode != 0:
+            await ctx.send(f"Git pull failed (exit {result.returncode}):\n```{output}```")
+            return
+
+        await ctx.send(f"```{output}```\nRestarting...")
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     @commands.command()
