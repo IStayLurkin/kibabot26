@@ -63,10 +63,10 @@ class VoiceService:
         started_at = time.perf_counter()
         
         # --- NEW: TRY LOCAL PIPER FIRST ---
+        proc = None
         try:
             filename = f"piper_{uuid.uuid4().hex}.wav"
             path = self.output_dir / filename
-            # High speed local TTS (Ensure piper.exe is on your G: drive)
             command = ["piper", "--model", "en_US-kiba-medium.onnx", "--output_file", str(path)]
             proc = await asyncio.create_subprocess_exec(*command, stdin=asyncio.subprocess.PIPE)
             await asyncio.wait_for(proc.communicate(input=text.encode()), timeout=30.0)
@@ -74,10 +74,12 @@ class VoiceService:
                 return str(path)
         except asyncio.TimeoutError:
             logger.warning("Local Piper TTS timed out after 30s, falling back")
-            try:
-                proc.kill()
-            except Exception:
-                pass
+            if proc is not None:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
         except Exception as e:
             logger.warning("Local Piper TTS failed, falling back to original logic: %s", e)
 
