@@ -209,7 +209,8 @@ async def get_conversation_state(user_id: str, channel_id: str) -> dict:
 
 
 async def delete_user_history(user_id: str, channel_id: str):
-    """Deletes all chat messages, session, summary, state, and memory for a user/channel."""
+    """Deletes chat session, summaries, and state for a user in a specific channel.
+    Also wipes global user_memory facts (cross-channel by design — facts apply everywhere)."""
     db = await get_db()
     await db.execute("DELETE FROM chat_sessions WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
     await db.execute("DELETE FROM chat_summaries WHERE user_id = ? AND channel_id = ?", (user_id, channel_id))
