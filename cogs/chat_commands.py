@@ -381,6 +381,8 @@ class ChatCommands(commands.Cog):
                 content = content.replace(m, "").strip()
         if not content:
             return
+        if await self.is_on_cooldown(message.author.id):
+            return
         await self.handle_chat_turn(message.channel, message.author, message.channel, content)
 
     @commands.command(aliases=["latency"])
