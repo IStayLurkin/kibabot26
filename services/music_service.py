@@ -79,8 +79,14 @@ class MusicService:
         path = self.output_dir / filename
         try:
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_melody_local, prompt, str(path))
+            result = await asyncio.wait_for(
+                loop.run_in_executor(HEAVY_EXECUTOR, self._generate_melody_local, prompt, str(path)),
+                timeout=480.0,
+            )
             return result
+        except asyncio.TimeoutError:
+            logger.error("[music] Generation timed out after 480s")
+            return None
         except Exception as e:
             logger.error("Melody generation failed: %s", e)
             return ""
@@ -101,8 +107,14 @@ class MusicService:
         prompt = f"{vibe}, {voice_style} vocals, {vocal_mode}, {bpm} BPM. {lyrics}"
         try:
             loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(HEAVY_EXECUTOR, self._generate_yue_studio, prompt, str(path))
+            result = await asyncio.wait_for(
+                loop.run_in_executor(HEAVY_EXECUTOR, self._generate_yue_studio, prompt, str(path)),
+                timeout=480.0,
+            )
             return result
+        except asyncio.TimeoutError:
+            logger.error("[music] Generation timed out after 480s")
+            return None
         except Exception as e:
             logger.error("YuE Studio generation failed: %s", e)
             return ""

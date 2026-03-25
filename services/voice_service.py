@@ -46,7 +46,10 @@ class VoiceService:
             return " ".join([s.text for s in segments])
 
         from core.executors import HEAVY_EXECUTOR
-        result = await loop.run_in_executor(HEAVY_EXECUTOR, transcribe)
+        result = await asyncio.wait_for(
+            loop.run_in_executor(HEAVY_EXECUTOR, transcribe),
+            timeout=120.0,
+        )
         self._stt_last_used = time.time()
         if self._stt_unload_task:
             self._stt_unload_task.cancel()
