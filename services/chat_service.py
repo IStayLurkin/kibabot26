@@ -223,6 +223,14 @@ async def _run_tool(tool_name: str, tool_input: str, services: dict | None) -> C
             )
 
         melody_path = await music_service.generate_melody(cleaned_input)
+        if not melody_path:
+            return ChatReply(
+                content="❌ Melody generation failed. Check VRAM availability.",
+                intent=INTENT_TOOL_USE_REQUEST,
+                response_mode="tool",
+                goal=cleaned_input,
+                tool_name="music",
+            )
         return ChatReply(
             content="Here’s the melody I generated.",
             file_paths=[melody_path],

@@ -73,7 +73,7 @@ class MusicService:
         except Exception as e:
             logger.debug("Unload failed: %s", e)
 
-    async def generate_melody(self, prompt: str) -> str:
+    async def generate_melody(self, prompt: str) -> Optional[str]:
         await self._unload_ollama()
         filename = f"melody_{int(time.time())}.wav"
         path = self.output_dir / filename
@@ -89,7 +89,7 @@ class MusicService:
             return None
         except Exception as e:
             logger.error("Melody generation failed: %s", e)
-            return ""
+            return None
         finally:
             self.clear_vram()
 
@@ -100,7 +100,7 @@ class MusicService:
         voice_style: str,
         vocal_mode: str,
         lyrics: str = ""
-    ) -> str:
+    ) -> Optional[str]:
         await self._unload_ollama()
         filename = f"kiba_studio_{int(time.time())}.mp3"
         path = self.output_dir / filename
@@ -117,7 +117,7 @@ class MusicService:
             return None
         except Exception as e:
             logger.error("YuE Studio generation failed: %s", e)
-            return ""
+            return None
         finally:
             self.clear_vram()
 
