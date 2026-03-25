@@ -5,6 +5,19 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Quality & Reliability Improvements
+
+### New Features
+- **`safe_task()` utility** — all fire-and-forget `asyncio.create_task()` calls now use `safe_task()`, which attaches a done-callback that logs any unhandled exceptions. Previously `maybe_update_summary` and `_prewarm_ollama` failures were completely invisible.
+- **Startup service validation** — on `on_ready`, bot now background-validates Giphy API key, SearXNG reachability, and embedding service responsiveness. Logs clear warnings instead of silently failing on first use.
+
+### Bug Fixes
+- **animatediff numpy import inside thread** — `import numpy as np` was inside `_generate_sync` (a `ThreadPoolExecutor` method). Moved to top-level `try/except ImportError` block alongside other optional imports.
+- **STT executor call had no timeout** — `loop.run_in_executor(HEAVY_EXECUTOR, transcribe)` in `voice_service` could hang indefinitely if Whisper stalled. Added `asyncio.wait_for(..., timeout=120.0)`.
+- **Music generation had no timeout** — YuE and StableAudio `run_in_executor` calls in `music_service` had no timeout. Added `asyncio.wait_for(..., timeout=480.0)` with `TimeoutError` handling that returns `None` and logs clearly.
+
+---
+
 ## [2026-03-25] — Async & Threading Bug Fix Sprint
 
 ### Bug Fixes
