@@ -67,6 +67,7 @@ class ChatCommands(commands.Cog):
             "command_help_service": getattr(bot, "command_help_service", None),
             "behavior_rule_service": getattr(bot, "behavior_rule_service", None),
             "vector_memory_service": getattr(bot, "vector_memory_service", None),
+            "search_service": getattr(bot, "search_service", None),
         }
 
     async def is_on_cooldown(self, user_id: int, seconds: float = CHAT_COOLDOWN_SECONDS) -> bool:
@@ -283,7 +284,7 @@ class ChatCommands(commands.Cog):
                             await destination.send(file=discord.File(str(p), filename=p.name))
                         else:
                             # Remote URL — download and send as attachment (8 MB cap)
-                            async with aiohttp.ClientSession() as _sess:
+                            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as _sess:
                                 async with _sess.get(url_or_path) as _resp:
                                     if _resp.status == 200:
                                         data = await _resp.read()
@@ -414,6 +415,8 @@ class ChatCommands(commands.Cog):
     @commands.command(name="models")
     async def loaded_models(self, ctx):
         """Shows which AI models are currently loaded in VRAM via Ollama."""
+        if not self.hardware_service:
+            return await ctx.send("❌ Hardware service not available.")
         models = await asyncio.to_thread(self.hardware_service.get_ollama_running_models)
         embed = discord.Embed(title="🤖 Active AI Models", color=discord.Color.dark_blue())
         if not models:
