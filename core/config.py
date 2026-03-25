@@ -1,6 +1,5 @@
 import logging
 import os
-import torch  # Required for the hardware check
 from dotenv import load_dotenv
 from core.constants import BOT_DEFAULT_PREFIX
 
@@ -9,12 +8,12 @@ _config_logger = logging.getLogger(__name__)
 from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
 
-# --- HARDWARE PREFERENCE DEFINITION (Moved up to fix NameError) ---
+# --- HARDWARE PREFERENCE DEFINITION ---
 CUDA_PREFERRED = os.getenv("CUDA_PREFERRED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-# Force CUDA context for the 3090 Ti if preferred and available
-if CUDA_PREFERRED and torch.cuda.is_available():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# Pin device 0 without importing torch — torch checks CUDA_VISIBLE_DEVICES at first use
+if CUDA_PREFERRED:
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 # --- DRIVE REDIRECTION ---
 os.environ["HF_HOME"] = "G:/huggingface_cache"
