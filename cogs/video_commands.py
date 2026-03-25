@@ -34,10 +34,6 @@ class VideoCommands(commands.Cog):
             await ctx.send(f"Prompt too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
             return
 
-        if self.bot.generating_lock.locked():
-            await ctx.send("⏳ Already generating something, please wait.")
-            return
-
         async with self.bot.generating_lock:
             self.bot.generating_count += 1
             status_msg = await ctx.send(
