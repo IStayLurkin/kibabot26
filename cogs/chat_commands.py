@@ -3,6 +3,8 @@ import os
 import asyncio
 import time
 import gc
+import tempfile
+import uuid
 import torch
 import discord
 import aiohttp
@@ -261,7 +263,8 @@ class ChatCommands(commands.Cog):
                 if any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg', '.m4a']):
                     voice_svc = getattr(self.bot, "voice_service", None)
                     if voice_svc:
-                        temp_path = f"temp_{attachment.filename}"
+                        ext = Path(attachment.filename).suffix or ".wav"
+                        temp_path = os.path.join(tempfile.gettempdir(), f"kiba_stt_{uuid.uuid4().hex}{ext}")
                         await attachment.save(temp_path)
                         try:
                             transcription = await voice_svc.speech_to_text(temp_path)

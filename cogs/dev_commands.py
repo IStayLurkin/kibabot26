@@ -96,6 +96,7 @@ class DevCommands(commands.Cog):
             return
 
         await ctx.send(f"```{output}```\nRestarting...")
+        await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     @commands.command()
