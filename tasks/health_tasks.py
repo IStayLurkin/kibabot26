@@ -18,11 +18,7 @@ class HealthTasks:
             self.bot_health_check.start()
 
         if self.loop_monitor_task is None or self.loop_monitor_task.done():
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.get_event_loop()
-            self.loop_monitor_task = loop.create_task(
+            self.loop_monitor_task = asyncio.get_running_loop().create_task(
                 monitor_event_loop(self.bot.performance_tracker)
             )
 
