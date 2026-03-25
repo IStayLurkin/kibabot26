@@ -62,7 +62,10 @@ class MediaCommands(commands.Cog):
         async with ctx.typing():
             try:
                 image_path = await self.image_service.generate_image(prompt)
-                await ctx.send(file=discord.File(image_path, filename=Path(image_path).name))
+                if image_path and Path(image_path).exists():
+                    await ctx.send(file=discord.File(image_path, filename=Path(image_path).name))
+                else:
+                    await ctx.send("❌ Image generation failed. Check VRAM availability.")
             except Exception as exc:
                 await ctx.send(f"Image generation failed: {exc}")
 
@@ -85,7 +88,10 @@ class MediaCommands(commands.Cog):
         async with ctx.typing():
             try:
                 audio_path = await self.voice_service.text_to_speech(text)
-                await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+                if audio_path and Path(audio_path).exists():
+                    await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+                else:
+                    await ctx.send("❌ TTS failed. Check terminal.")
             except Exception as exc:
                 await ctx.send(f"Text-to-speech failed: {exc}")
 
@@ -108,7 +114,10 @@ class MediaCommands(commands.Cog):
         async with ctx.typing():
             try:
                 video_path = await self.video_service.generate_video(prompt)
-                await ctx.send(file=discord.File(video_path, filename=Path(video_path).name))
+                if video_path and Path(video_path).exists():
+                    await ctx.send(file=discord.File(video_path, filename=Path(video_path).name))
+                else:
+                    await ctx.send("❌ Video generation failed. Check VRAM availability.")
             except NotImplementedError as exc:
                 await ctx.send(str(exc))
             except Exception as exc:
