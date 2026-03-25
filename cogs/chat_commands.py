@@ -342,20 +342,10 @@ class ChatCommands(commands.Cog):
                         await add_chat_message(session_id, "bot", reply.content)
                         logger.info("[chat] bot=%r", reply.content[:500])
                         content = reply.content
-                        if len(content) <= 200:
+                        if len(content) <= 2000:
                             await destination.send(content)
                         else:
-                            # Chunked streaming-style delivery
-                            chunk_size = 250
-                            placeholder = await destination.send(content[:chunk_size])
-                            for i in range(chunk_size, len(content), chunk_size):
-                                await asyncio.sleep(0.05)
-                                end = min(i + chunk_size, len(content))
-                                await placeholder.edit(content=content[:end])
-                            # If content > 2000, send remaining in follow-up messages
-                            if len(content) > 2000:
-                                for i in range(2000, len(content), 1900):
-                                    await destination.send(content[i:i+1900])
+                            await send_long_message(destination, content)
 
                     for fp in reply.file_paths:
                         if fp and os.path.exists(fp):
