@@ -6,6 +6,7 @@ from database.db_connection import get_db
 async def init_model_registry_db():
     db = await get_db()
 
+    # Check if table exists
     cursor = await db.execute("""
         SELECT name
         FROM sqlite_master
@@ -13,70 +14,78 @@ async def init_model_registry_db():
     """)
     existing_table = await cursor.fetchone()
 
-    await db.execute("""
-        CREATE TABLE IF NOT EXISTS model_registry_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            provider TEXT NOT NULL,
-            model_name TEXT NOT NULL,
-            model_type TEXT NOT NULL CHECK(model_type IN ('llm', 'image', 'audio')),
-            source TEXT NOT NULL DEFAULT 'manual',
-            enabled INTEGER NOT NULL DEFAULT 1,
-            local_path TEXT,
-            capabilities TEXT NOT NULL DEFAULT '[]',
-            backend TEXT NOT NULL DEFAULT '',
-            preferred_device TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_synced_at TEXT
-        )
-    """)
-
+    # Check if already on current schema (has 'backend' column)
+    already_migrated = False
     if existing_table:
-        try:
-            await db.execute("""
-                INSERT INTO model_registry_new (
-                    id,
-                    provider,
-                    model_name,
-                    model_type,
-                    source,
-                    enabled,
-                    local_path,
-                    capabilities,
-                    backend,
-                    preferred_device,
-                    created_at,
-                    updated_at,
-                    last_synced_at
-                )
-                SELECT
-                    id,
-                    provider,
-                    model_name,
-                    model_type,
-                    source,
-                    enabled,
-                    local_path,
-                    capabilities,
-                    backend,
-                    preferred_device,
-                    created_at,
-                    updated_at,
-                    last_synced_at
-                FROM model_registry
-                WHERE model_type IN ('llm', 'image', 'audio')
-                ON CONFLICT(id) DO NOTHING
-            """)
-            await db.execute("DROP TABLE IF EXISTS model_registry")
+        cursor = await db.execute("PRAGMA table_info(model_registry)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        already_migrated = "backend" in columns
+
+    if not already_migrated:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS model_registry_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                model_type TEXT NOT NULL CHECK(model_type IN ('llm', 'image', 'audio')),
+                source TEXT NOT NULL DEFAULT 'manual',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                local_path TEXT,
+                capabilities TEXT NOT NULL DEFAULT '[]',
+                backend TEXT NOT NULL DEFAULT '',
+                preferred_device TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_synced_at TEXT
+            )
+        """)
+
+        if existing_table:
+            try:
+                await db.execute("""
+                    INSERT INTO model_registry_new (
+                        id,
+                        provider,
+                        model_name,
+                        model_type,
+                        source,
+                        enabled,
+                        local_path,
+                        capabilities,
+                        backend,
+                        preferred_device,
+                        created_at,
+                        updated_at,
+                        last_synced_at
+                    )
+                    SELECT
+                        id,
+                        provider,
+                        model_name,
+                        model_type,
+                        source,
+                        enabled,
+                        local_path,
+                        capabilities,
+                        backend,
+                        preferred_device,
+                        created_at,
+                        updated_at,
+                        last_synced_at
+                    FROM model_registry
+                    WHERE model_type IN ('llm', 'image', 'audio')
+                    ON CONFLICT(id) DO NOTHING
+                """)
+                await db.execute("DROP TABLE IF EXISTS model_registry")
+                await db.execute("ALTER TABLE model_registry_new RENAME TO model_registry")
+                await db.commit()
+            except Exception:
+                await db.execute("DROP TABLE IF EXISTS model_registry_new")
+                await db.commit()
+                raise
+        else:
             await db.execute("ALTER TABLE model_registry_new RENAME TO model_registry")
             await db.commit()
-        except Exception:
-            await db.execute("DROP TABLE IF EXISTS model_registry_new")
-            await db.commit()
-            raise
-    else:
-        await db.execute("ALTER TABLE model_registry_new RENAME TO model_registry")
-        await db.commit()
 
     await db.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_model_registry_unique
