@@ -309,7 +309,8 @@ class ChatCommands(commands.Cog):
                 if intent in ("draw", "sing"):
                     # Media path — AgentDispatcher handles VRAM locking and generation
                     await add_chat_message(session_id, "user", content)
-                    response_text, file_path = await self.dispatcher.run(user_id, channel_id, content)
+                    display_name = getattr(author, "display_name", str(author))
+                    response_text, file_path = await self.dispatcher.run(user_id, channel_id, content, display_name=display_name)
 
                     if response_text:
                         await add_chat_message(session_id, "bot", response_text)

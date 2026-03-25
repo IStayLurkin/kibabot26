@@ -18,6 +18,7 @@ class AgentState(TypedDict):
     channel_id: str
     next_step: str
     file_path: Optional[str]
+    display_name: str
 
 class AgentDispatcher:
     def __init__(self, bot):
@@ -87,6 +88,7 @@ class AgentDispatcher:
         """Dialed-in node that injects Brandon's memory and hardware context."""
         user_id = state["user_id"]
         channel_id = state.get("channel_id", "default")
+        display_name = state.get("display_name") or user_id
         prompt = state["messages"][-1]
 
         # 1. Retrieve Brandon's facts and recent history from the G: drive DB
@@ -106,7 +108,7 @@ class AgentDispatcher:
 
         # 3. Call LLM with full context injection
         response = await self.llm.generate_reply(
-            user_display_name=user_id,
+            user_display_name=display_name,
             user_message=f"{hardware_context}\n\nUser Request: {prompt}",
             memory=dict(memory_rows),
             recent_messages=[], # LLMService handles history via session_id
@@ -161,14 +163,15 @@ class AgentDispatcher:
             finally:
                 self.bot.generating_count -= 1
 
-    async def run(self, user_id: str, channel_id: str, content: str):
+    async def run(self, user_id: str, channel_id: str, content: str, display_name: str = ""):
         """Dispatcher entry point. Now correctly routes channel_id for memory lookup."""
         inputs = {
-            "messages": [content], 
-            "user_id": user_id, 
+            "messages": [content],
+            "user_id": user_id,
             "channel_id": channel_id,
-            "next_step": "", 
-            "file_path": None
+            "next_step": "",
+            "file_path": None,
+            "display_name": display_name or user_id,
         }
         result = await self.workflow.ainvoke(inputs)
         return result["messages"][-1], result.get("file_path")
