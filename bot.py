@@ -390,7 +390,7 @@ async def main():
     # Increase default thread pool so asyncio.to_thread LLM calls
     # don't starve the Discord heartbeat on long inference.
     import concurrent.futures
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     loop.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=8))
 
     logger.debug("Bot initializing...")
