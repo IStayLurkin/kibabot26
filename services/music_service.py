@@ -212,6 +212,8 @@ class MusicService:
                 os.unlink(genre_file)
             if lyrics_file and os.path.exists(lyrics_file):
                 os.unlink(lyrics_file)
+            if os.path.exists(output_dir):
+                shutil.rmtree(output_dir, ignore_errors=True)
 
     def _save_audio(self, audio_data, filepath: str):
         import scipy.io.wavfile as wavfile
