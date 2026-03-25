@@ -83,8 +83,9 @@ async def _ollama_is_running() -> bool:
 
 async def _wait_for_ollama(timeout: float = 30.0) -> bool:
     """Poll until ollama is ready or timeout expires. Returns True if ready."""
-    deadline = asyncio.get_event_loop().time() + timeout
-    while asyncio.get_event_loop().time() < deadline:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
         if await _ollama_is_running():
             return True
         await asyncio.sleep(1.0)
