@@ -155,3 +155,8 @@ GPU_TOTAL_VRAM_MB = _parse_int(os.getenv("GPU_TOTAL_VRAM_MB", "24576"), 24576)
 SEARXNG_ENABLED = os.getenv("SEARXNG_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 SEARXNG_BASE_URL = os.getenv("SEARXNG_BASE_URL", "http://localhost:8080").strip()
 SEARXNG_MAX_RESULTS = _parse_int(os.getenv("SEARXNG_MAX_RESULTS", "5"), 5)
+
+YUE_REPO_PATH = os.getenv(
+    "YUE_REPO_PATH",
+    "G:/code/python/learn_python/bot/YuE/inference",
+).strip()

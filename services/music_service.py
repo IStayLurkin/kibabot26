@@ -22,6 +22,7 @@ from core.config import (
     MUSIC_DEFAULT_QUALITY,
     MUSIC_REQUEST_TIMEOUT_SECONDS,
     OLLAMA_MODEL,
+    YUE_REPO_PATH,
 )
 from core.executors import HEAVY_EXECUTOR
 from core.feature_flags import MEDIA_OUTPUT_DIR
@@ -29,8 +30,6 @@ from core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# YuE repo lives on G: drive
-YUE_REPO_PATH = "G:/code/python/learn_python/bot/YuE/inference"
 YUE_STAGE1_MODEL = "m-a-p/YuE-s1-7B-anneal-en-cot"
 YUE_STAGE2_MODEL = "m-a-p/YuE-s2-1B-general"
 

@@ -59,6 +59,7 @@ class ChatCommands(commands.Cog):
             "image_service": getattr(bot, "image_service", None),
             "voice_service": getattr(bot, "voice_service", None),
             "video_service": getattr(bot, "video_service", None),
+            "animatediff_service": getattr(bot, "animatediff_service", None),
             "music_service": getattr(bot, "music_service", None),
             "osint_service": getattr(bot, "osint_service", None),
             "codegen_service": getattr(bot, "codegen_service", None),

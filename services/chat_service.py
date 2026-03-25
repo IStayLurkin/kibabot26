@@ -182,34 +182,34 @@ async def _run_tool(tool_name: str, tool_input: str, services: dict | None) -> C
         )
 
     if tool_name == "video":
-        video_service = services.get("video_service")
-        if video_service is None:
+        # Try real backends first (animatediff = lowest VRAM, fastest)
+        animatediff_service = services.get("animatediff_service")
+        if animatediff_service is not None:
+            video_path = await animatediff_service.generate(prompt=cleaned_input, callback=None)
+            if video_path:
+                return ChatReply(
+                    content="Here’s the generated video.",
+                    file_paths=[video_path],
+                    intent=INTENT_TOOL_USE_REQUEST,
+                    response_mode="tool",
+                    goal=cleaned_input,
+                    tool_name="video",
+                )
             return ChatReply(
-                content="I can handle video requests later, but the video service is not available right now.",
+                content="Video generation failed. Check VRAM availability.",
                 intent=INTENT_TOOL_USE_REQUEST,
                 response_mode="tool",
                 goal=cleaned_input,
                 tool_name="video",
             )
 
-        try:
-            video_path = await video_service.generate_video(cleaned_input)
-            return ChatReply(
-                content="Here’s the generated video.",
-                file_paths=[video_path],
-                intent=INTENT_TOOL_USE_REQUEST,
-                response_mode="tool",
-                goal=cleaned_input,
-                tool_name="video",
-            )
-        except NotImplementedError as exc:
-            return ChatReply(
-                content=str(exc),
-                intent=INTENT_TOOL_USE_REQUEST,
-                response_mode="tool",
-                goal=cleaned_input,
-                tool_name="video",
-            )
+        return ChatReply(
+            content="Use !animatediff, !cogvideo2b, !cogvideo5b, or !wan for video generation.",
+            intent=INTENT_TOOL_USE_REQUEST,
+            response_mode="tool",
+            goal=cleaned_input,
+            tool_name="video",
+        )
 
     if tool_name == "music":
         music_service = services.get("music_service")

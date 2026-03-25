@@ -33,25 +33,25 @@ class AgentDispatcher:
 
         # Add Nodes
         graph.add_node("router", self.router_node)
-        graph.add_node("coding_agent", self.coding_node)
+        graph.add_node("chat_agent", self.coding_node)
         graph.add_node("media_agent", self.media_node)
         graph.add_node("music_agent", self.music_agent_node)
 
         # Define Flow
         graph.set_entry_point("router")
-        
+
         # Mapping logic based on detected intent
         graph.add_conditional_edges(
             "router",
             lambda x: x["next_step"],
             {
-                "chat": "coding_agent",
+                "chat": "chat_agent",
                 "draw": "media_agent",
                 "sing": "music_agent"
             }
         )
 
-        graph.add_edge("coding_agent", END)
+        graph.add_edge("chat_agent", END)
         graph.add_edge("media_agent", END)
         graph.add_edge("music_agent", END)
 
@@ -119,48 +119,52 @@ class AgentDispatcher:
 
     async def media_node(self, state: AgentState):
         """FLUX.2 Image generation path with Safety Lock for VRAM Guard."""
+        if self.bot.generating_lock.locked():
+            return {"messages": ["⏳ Already generating something, please wait."], "file_path": None}
+
         async with self.bot.generating_lock:
             self.bot.generating_count += 1
-        try:
-            prompt = state["messages"][-1]
-            image_path = await self.image_gen.generate_image(prompt)
+            try:
+                prompt = state["messages"][-1]
+                image_path = await self.image_gen.generate_image(prompt)
 
-            if image_path and os.path.exists(image_path):
-                return {
-                    "messages": ["🎨 **Kiba Engine:** Image rendering complete. Patching file..."],
-                    "file_path": image_path,
-                }
-            return {"messages": ["❌ Image generation failed. Check terminal logs."], "file_path": None}
-        finally:
-            async with self.bot.generating_lock:
+                if image_path and os.path.exists(image_path):
+                    return {
+                        "messages": ["🎨 **Kiba Engine:** Image rendering complete. Patching file..."],
+                        "file_path": image_path,
+                    }
+                return {"messages": ["❌ Image generation failed. Check terminal logs."], "file_path": None}
+            finally:
                 self.bot.generating_count -= 1
 
     async def music_agent_node(self, state: AgentState):
         """YuE / Stable Audio generation path with Safety Lock for VRAM Guard."""
+        if self.bot.generating_lock.locked():
+            return {"messages": ["⏳ Already generating something, please wait."], "file_path": None}
+
         async with self.bot.generating_lock:
             self.bot.generating_count += 1
-        try:
-            prompt = state["messages"][-1]
+            try:
+                prompt = state["messages"][-1]
 
-            if any(word in prompt.lower() for word in ["sing", "lyrics", "song", "vocal"]):
-                audio_path = await self.music_gen.generate_song_clip(
-                    vibe="cinematic",
-                    bpm=120,
-                    voice_style="studio",
-                    vocal_mode="lyrics",
-                    lyrics=prompt,
-                )
-            else:
-                audio_path = await self.music_gen.generate_melody(prompt)
+                if any(word in prompt.lower() for word in ["sing", "lyrics", "song", "vocal"]):
+                    audio_path = await self.music_gen.generate_song_clip(
+                        vibe="cinematic",
+                        bpm=120,
+                        voice_style="studio",
+                        vocal_mode="lyrics",
+                        lyrics=prompt,
+                    )
+                else:
+                    audio_path = await self.music_gen.generate_melody(prompt)
 
-            if audio_path and os.path.exists(audio_path):
-                return {
-                    "messages": ["🎵 **Studio Specialist:** Audio synthesis complete. Uploading track..."],
-                    "file_path": audio_path,
-                }
-            return {"messages": ["❌ Audio generation failed. Check VRAM availability."], "file_path": None}
-        finally:
-            async with self.bot.generating_lock:
+                if audio_path and os.path.exists(audio_path):
+                    return {
+                        "messages": ["🎵 **Studio Specialist:** Audio synthesis complete. Uploading track..."],
+                        "file_path": audio_path,
+                    }
+                return {"messages": ["❌ Audio generation failed. Check VRAM availability."], "file_path": None}
+            finally:
                 self.bot.generating_count -= 1
 
     async def run(self, user_id: str, channel_id: str, content: str):
