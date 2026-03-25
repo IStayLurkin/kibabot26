@@ -17,12 +17,14 @@ try:
     from diffusers import AnimateDiffPipeline, MotionAdapter, EulerDiscreteScheduler
     from diffusers.utils import export_to_video
     import imageio
+    import numpy as np
 except ImportError:
     AnimateDiffPipeline = None
     MotionAdapter = None
     EulerDiscreteScheduler = None
     export_to_video = None
     imageio = None
+    np = None
 
 MOTION_ADAPTER_REPO = "guoyww/animatediff-motion-adapter-v1-5-2"
 BASE_MODEL_REPO = "SG161222/Realistic_Vision_V5.1_noVAE"
@@ -87,7 +89,6 @@ class AnimateDiffService:
             callback_on_step_end=step_callback,
         )
         frames = output.frames[0]
-        import numpy as np
         frames_np = [np.array(f) for f in frames]
         imageio.mimwrite(filepath, frames_np, fps=8, codec="libx264")
         return filepath
