@@ -119,9 +119,6 @@ class AgentDispatcher:
 
     async def media_node(self, state: AgentState):
         """FLUX.2 Image generation path with Safety Lock for VRAM Guard."""
-        if self.bot.generating_lock.locked():
-            return {"messages": ["⏳ Already generating something, please wait."], "file_path": None}
-
         async with self.bot.generating_lock:
             self.bot.generating_count += 1
             try:
@@ -139,9 +136,6 @@ class AgentDispatcher:
 
     async def music_agent_node(self, state: AgentState):
         """YuE / Stable Audio generation path with Safety Lock for VRAM Guard."""
-        if self.bot.generating_lock.locked():
-            return {"messages": ["⏳ Already generating something, please wait."], "file_path": None}
-
         async with self.bot.generating_lock:
             self.bot.generating_count += 1
             try:
