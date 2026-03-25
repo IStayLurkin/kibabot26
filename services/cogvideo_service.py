@@ -17,9 +17,11 @@ logger = get_logger(__name__)
 try:
     from diffusers import CogVideoXPipeline
     import imageio
+    import numpy as np
 except ImportError:
     CogVideoXPipeline = None
     imageio = None
+    np = None
 
 COGVIDEO_2B_REPO = "THUDM/CogVideoX-2b"
 COGVIDEO_5B_REPO = "THUDM/CogVideoX-5b"
@@ -81,7 +83,7 @@ class CogVideoService:
 
         # Export frames to MP4
         frames = output.frames[0]  # list of PIL images
-        frames_np = [frame if hasattr(frame, 'shape') else __import__('numpy').array(frame) for frame in frames]
+        frames_np = [frame if hasattr(frame, 'shape') else np.array(frame) for frame in frames]
         imageio.mimwrite(filepath, frames_np, fps=8, codec="libx264")
         return filepath
 
