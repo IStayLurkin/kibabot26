@@ -40,6 +40,8 @@ class VideoCommands(commands.Cog):
                 f"🎬 **Starting {label}...**\n[░░░░░░░░░░] 0%\n📟 **VRAM:** --"
             )
 
+            _loop = asyncio.get_running_loop()
+
             def update_progress(percent: int, vram_gb: float):
                 blocks = int(percent / 10)
                 bar = "█" * blocks + "░" * (10 - blocks)
@@ -49,7 +51,7 @@ class VideoCommands(commands.Cog):
                         f"[{bar}] {percent}%\n"
                         f"📟 **VRAM:** {vram_gb}GB / 24.0GB"
                     )),
-                    self.bot.loop,
+                    _loop,
                 )
 
             try:
