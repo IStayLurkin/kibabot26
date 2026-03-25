@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from bot import send_long_message
+from bot import send_long_message, safe_task
 from discord.ext import commands
 
 from core.constants import (
@@ -364,7 +364,7 @@ class ChatCommands(commands.Cog):
                 await destination.send("❌ Neural sync error. Check terminal.")
 
         # Run summary update after typing indicator is closed — silent background task
-        asyncio.create_task(maybe_update_summary(self.llm, user_id, channel_id, session_id))
+        safe_task(maybe_update_summary(self.llm, user_id, channel_id, session_id), name="summary_update")
 
     async def handle_natural_chat(self, message: discord.Message):
         if message.author.bot:

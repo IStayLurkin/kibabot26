@@ -99,6 +99,17 @@ async def send_long_message(destination, text):
     for i in range(0, len(text), 1900):
         await destination.send(text[i:i+1900])
 
+
+def safe_task(coro, *, name: str = ""):
+    """Schedule a fire-and-forget coroutine that logs any unhandled exceptions."""
+    task = asyncio.create_task(coro, name=name or None)
+    def _on_done(t: asyncio.Task):
+        if not t.cancelled() and t.exception() is not None:
+            logger.exception("[safe_task] Background task %r raised an exception", name, exc_info=t.exception())
+    task.add_done_callback(_on_done)
+    return task
+
+
 class ExpenseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -325,7 +336,8 @@ async def on_ready():
     if not bot.startup_banner_printed:
         bot.print_startup_banner()
         bot.startup_banner_printed = True
-        asyncio.create_task(_prewarm_ollama())
+        safe_task(_prewarm_ollama(), name="prewarm_ollama")
+        safe_task(_validate_services(bot), name="validate_services")
     else:
         logger.info("[gateway] reconnected user=%s", bot.user)
 
@@ -339,6 +351,37 @@ async def _prewarm_ollama():
         logger.info("[prewarm] Ollama model loaded into VRAM and ready.")
     except Exception as exc:
         logger.warning("[prewarm] Ollama pre-warm failed (will load on first message): %s", exc)
+
+
+async def _validate_services(b: "ExpenseBot") -> None:
+    """Log warnings for optional services that are misconfigured or unavailable."""
+    from core.config import GIPHY_API_KEY, SEARXNG_ENABLED, SEARXNG_BASE_URL
+
+    if not GIPHY_API_KEY:
+        logger.warning("[startup] GIPHY_API_KEY not set — image search will only use local folder")
+
+    if SEARXNG_ENABLED:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{SEARXNG_BASE_URL}/healthz")
+            if resp.status_code != 200:
+                logger.warning("[startup] SearXNG returned %d — web search may not work", resp.status_code)
+            else:
+                logger.info("[startup] SearXNG reachable at %s", SEARXNG_BASE_URL)
+        except Exception as exc:
+            logger.warning("[startup] SearXNG not reachable: %s — web search may not work", exc)
+
+    if b.vector_memory_service is not None:
+        try:
+            test_vec = await b.vector_memory_service._embed.embed("test")
+            if not test_vec:
+                logger.warning("[startup] Embedding service returned empty — vector memory will not work")
+            else:
+                logger.info("[startup] Embedding service OK (%d dims)", len(test_vec))
+        except Exception as exc:
+            logger.warning("[startup] Embedding service failed: %s", exc)
+
 
 @bot.event
 async def on_resumed():
