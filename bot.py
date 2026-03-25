@@ -129,6 +129,7 @@ class ExpenseBot(commands.Bot):
         self.model_runtime_service = None
         self.command_help_service = None
         self.vector_memory_service = None
+        self.search_service = None
         self.cogvideo_service = None
         self.animatediff_service = None
         self.wan_service = None
@@ -188,12 +189,12 @@ class ExpenseBot(commands.Bot):
         await self.model_runtime_service.initialize()
         self.command_help_service = CommandHelpService()
         self.behavior_rule_service = BehaviorRuleService()
-        search_service = SearchService(base_url=SEARXNG_BASE_URL, max_results=SEARXNG_MAX_RESULTS) if SEARXNG_ENABLED else None
+        self.search_service = SearchService(base_url=SEARXNG_BASE_URL, max_results=SEARXNG_MAX_RESULTS) if SEARXNG_ENABLED else None
         self.llm_service = LLMService(
             performance_tracker=self.performance_tracker,
             model_runtime_service=self.model_runtime_service,
             behavior_rule_service=self.behavior_rule_service,
-            search_service=search_service,
+            search_service=self.search_service,
         )
         _embed_base = OLLAMA_BASE_URL[:-3] if OLLAMA_BASE_URL.endswith("/v1") else OLLAMA_BASE_URL
         embedding_service = EmbeddingService(base_url=_embed_base, model="nomic-embed-text")
