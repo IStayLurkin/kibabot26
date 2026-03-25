@@ -19,8 +19,6 @@ except ImportError:
     StableAudioPipeline = None
 
 from core.config import (
-    MUSIC_DEFAULT_QUALITY,
-    MUSIC_REQUEST_TIMEOUT_SECONDS,
     OLLAMA_MODEL,
     YUE_REPO_PATH,
 )
