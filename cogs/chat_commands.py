@@ -206,6 +206,8 @@ class ChatCommands(commands.Cog):
         
         status_msg = await ctx.send(f"{icon} **Kiba is initializing {mode} on the 3090 Ti...**\n[░░░░░░░░░░] 0%")
 
+        _loop = asyncio.get_running_loop()
+
         def update_bar(percent, vram_gb):
             blocks = int(percent / 10)
             bar = "█" * blocks + "░" * (10 - blocks)
@@ -215,7 +217,7 @@ class ChatCommands(commands.Cog):
                     f"[{bar}] {percent}%\n"
                     f"📟 **VRAM:** {vram_gb}GB / 24.0GB"
                 )),
-                self.bot.loop
+                _loop
             )
 
         # Enhance prompt via Ollama
