@@ -5,6 +5,26 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Async & Threading Bug Fix Sprint
+
+### Bug Fixes
+
+- **`search_service` wired into chat pipeline** — `search_service` was created in `bot.py` but never stored on the bot instance or passed to `ChatCommands._build_services`. Web search RAG was silently inactive on the natural chat path. Now stored as `bot.search_service` and included in the services dict.
+- **`last_update_time` race condition in `ImageService`** — initialized inside `_generate_sync` (called from a thread) instead of `__init__`, causing potential `AttributeError` on first callback and race on concurrent calls. Moved to `__init__`.
+- **`get_event_loop()` in thread executor** — `_generate_sync` called `asyncio.get_event_loop()` from inside a `ThreadPoolExecutor`, which is broken in Python 3.12. The running loop is now captured in the async `_run_gen` and passed as a parameter.
+- **`router_node` not async in `AgentDispatcher`** — LangGraph `ainvoke()` expects async nodes; `router_node` was a plain `def`. Made `async def`.
+- **`bot.loop` deprecated access** — `handle_image_request` (chat_commands) and `_handle_video` (video_commands) both used `self.bot.loop` inside sync callbacks. Replaced with `_loop = asyncio.get_running_loop()` captured before entering the thread.
+- **`bot.loop.create_task` in `health_tasks`** — replaced with `asyncio.get_running_loop().create_task(...)`.
+- **`get_event_loop()` in `main()`** — replaced with `get_running_loop()` inside the async function.
+- **`proc.kill()` unguarded in Piper TTS timeout** — `proc` could be unbound if `create_subprocess_exec` raised before assignment. Added `proc = None` guard and `await proc.wait()` to properly reap the process.
+- **`hardware_service` null crash in `!models`** — added early return if `hardware_service` is None.
+- **aiohttp image download had no timeout** — added `ClientTimeout(total=10)` to prevent indefinite hang on dead CDN.
+- **`!update` skipped `bot.close()`** — `os.execv` was called immediately, bypassing DB close, Ollama process teardown, and WebSocket cleanup. Now calls `await self.bot.close()` first.
+- **STT temp file used predictable name** — `temp_{filename}` in cwd could collide under concurrent uploads. Now uses `tempfile.gettempdir()` + UUID.
+- **`__import__('numpy')` inline in `cogvideo_service`** — replaced with a proper `import numpy as np` in the `try/except ImportError` block at the top of the file.
+
+---
+
 ## [2026-03-23] — Memory Management & Summary Fix
 
 ### New Features
