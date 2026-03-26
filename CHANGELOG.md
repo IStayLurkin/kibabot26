@@ -5,6 +5,14 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — SearXNG Auto-Start
+
+### New Features
+- **SearXNG auto-starts with the bot** — `start_bot.ps1` now checks if the `kiba-searxng` Docker container is running before launching the bot. If not, it runs `docker compose up -d` and waits 4 seconds for the port to bind. No more manual SearXNG startup.
+- **`docker-compose.yml` added** — defines the `kiba-searxng` service on port 8080, mounting `./searxng_config` as the config volume. `restart: unless-stopped` keeps it alive across reboots.
+
+---
+
 ## [2026-03-25] — Fine-Tooth Comb Pass #2
 
 ### Bug Fixes

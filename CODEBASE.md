@@ -231,3 +231,12 @@ Discord message
 | `.env` | Secrets and config — never committed |
 | `bot.db` | SQLite database — never committed |
 | `docs/plans/` | Implementation plans for major feature sprints |
+| `docker-compose.yml` | SearXNG service definition — `kiba-searxng` container on port 8080, mounts `searxng_config/` |
+| `searxng_config/settings.yml` | SearXNG config — port 8080, limiter disabled, JSON format enabled, `secret_key` should be changed for production |
+
+## Startup Scripts
+| File | Purpose |
+|------|---------|
+| `start_bot.ps1` | **Main launch script.** Starts Ollama if not running → starts SearXNG via Docker if not running → launches bot |
+| `run_bot.ps1` | Alternate launch (no SearXNG check) |
+| `watch_bot.ps1` | Auto-restart watcher |

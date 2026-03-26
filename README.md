@@ -80,13 +80,25 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    | `SEARXNG_BASE_URL` | SearXNG instance URL (default: `http://localhost:8080`) |
    | `SEARXNG_MAX_RESULTS` | Max results per search query (default: `5`) |
 
-5. **Run the bot:**
+5. **Set up SearXNG (web search RAG):**
+
+   Docker is required. The config is already included in `searxng_config/settings.yml`.
 
    ```powershell
-   .\run_bot.ps1
+   docker compose up -d searxng
    ```
 
-   This checks Ollama is running first, then launches the bot and tees output to `bot.log`.
+   This is handled automatically by `start_bot.ps1` on every launch — no manual step needed after the first run.
+
+   > Optionally change the `secret_key` in `searxng_config/settings.yml` from the default value.
+
+6. **Run the bot:**
+
+   ```powershell
+   .\start_bot.ps1
+   ```
+
+   This automatically: checks Ollama is running → starts SearXNG if not running → launches the bot.
 
 ## Commands
 
