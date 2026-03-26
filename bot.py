@@ -1,10 +1,9 @@
 # --- MUST BE AT THE ABSOLUTE TOP ---
 import os
-# Force all 33GB+ of AI models to stay on your G: drive project folder
-
-# Redirection for Ollama (Qwen3) - Ensures the bot knows where the engine sits
+# Set HF_HOME before any huggingface imports to prevent fallback to C:/Users/.cache
+os.environ.setdefault("HF_HOME", "D:/ai storage/huggingface_cache")
+os.environ.setdefault("TORCH_HOME", "D:/ai storage/torch_cache")
 os.environ['OLLAMA_MODELS'] = 'G:/ollamamodels'
-# ----------------------------------
 # ----------------------------------
 
 import asyncio
@@ -24,7 +23,7 @@ from core.config import (
     SEARXNG_BASE_URL,
     SEARXNG_MAX_RESULTS,
 )
-from core.logging_config import setup_logging, get_logger
+from core.logging_config import setup_logging, get_logger, StartupProgress
 from database.database import init_db
 from services.behavior_rule_service import BehaviorRuleService
 from services.code_execution_service import CodeExecutionService
@@ -48,6 +47,7 @@ from services.cogvideo_service import CogVideoService
 from services.animatediff_service import AnimateDiffService
 from services.wan_service import WanService
 from services.thinking_service import ThinkingService
+from services.vision_service import VisionService
 from tasks.task_manager import TaskManager
 
 
@@ -62,6 +62,7 @@ if not discord.opus.is_loaded():
 
 setup_logging()
 logger = get_logger(__name__)
+startup_progress = StartupProgress()
 # Replace your current intents block with this
 intents = discord.Intents.default()
 intents.message_content = True
@@ -138,6 +139,7 @@ class ExpenseBot(commands.Bot):
         self.animatediff_service = None
         self.wan_service = None
         self.thinking_service = None
+        self.vision_service = None
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
@@ -163,6 +165,7 @@ class ExpenseBot(commands.Bot):
     async def setup_hook(self):
         async with self.performance_tracker.track_service_call("startup.init_db"):
             await init_db()
+        startup_progress.advance("Database")
 
         service_started_at = time.perf_counter()
         self.hardware_service = HardwareService()
@@ -176,6 +179,7 @@ class ExpenseBot(commands.Bot):
             performance_tracker=self.performance_tracker,
         )
         await self.model_runtime_service.initialize()
+        startup_progress.advance("Hardware")
         self.command_help_service = CommandHelpService()
         self.behavior_rule_service = BehaviorRuleService()
         self.search_service = SearchService(base_url=SEARXNG_BASE_URL, max_results=SEARXNG_MAX_RESULTS) if SEARXNG_ENABLED else None
@@ -208,6 +212,7 @@ class ExpenseBot(commands.Bot):
         self.animatediff_service = AnimateDiffService()
         self.wan_service = WanService(runtime_service=self.model_runtime_service)
         self.thinking_service = ThinkingService(performance_tracker=self.performance_tracker)
+        self.vision_service = VisionService(performance_tracker=self.performance_tracker)
         self.music_service = MusicService(
             performance_tracker=self.performance_tracker,
             runtime_service=self.model_runtime_service,
@@ -221,6 +226,7 @@ class ExpenseBot(commands.Bot):
         )
         self.code_execution_service.initialize_workspace()
         self.osint_service = OSINTService(performance_tracker=self.performance_tracker)
+        startup_progress.advance("Services")
         self.performance_tracker.record_service_call(
             "startup.init_services",
             (time.perf_counter() - service_started_at) * 1000,
@@ -239,6 +245,7 @@ class ExpenseBot(commands.Bot):
             "cogs.video_commands",
             "tasks.vram_guard", # Essential VRAM monitoring task
             "cogs.thinking_commands",
+            "cogs.vision_commands",
         ]
 
         for extension in extensions:
@@ -253,6 +260,7 @@ class ExpenseBot(commands.Bot):
             except Exception as e:
                 logger.error("Failed to load extension %s: %s", extension, e)
 
+        startup_progress.advance("Cogs")
         self.task_manager.start_all()
 
     async def close(self):
@@ -314,6 +322,7 @@ async def on_ready():
     )
 
     if not bot.startup_banner_printed:
+        startup_progress.advance("Discord")
         bot.print_startup_banner()
         bot.startup_banner_printed = True
         safe_task(_prewarm_ollama(), name="prewarm_ollama")
@@ -355,6 +364,8 @@ async def _validate_services(b: "ExpenseBot") -> None:
                 logger.info("[startup] SearXNG reachable at %s", SEARXNG_BASE_URL)
         except Exception as exc:
             logger.warning("[startup] SearXNG not reachable: %s — web search may not work", exc)
+        finally:
+            startup_progress.advance("SearXNG")
 
     if b.vector_memory_service is not None:
         try:

@@ -261,6 +261,27 @@ class ChatCommands(commands.Cog):
         session_id = await get_or_create_session(user_id, channel_id)
 
         attachments = getattr(destination, "attachments", [])
+
+        # Auto-detect image attachments — analyze with vision service
+        vision_service = getattr(self.bot, "vision_service", None)
+        if vision_service and attachments:
+            for attachment in attachments:
+                if attachment.content_type and attachment.content_type.startswith("image/"):
+                    try:
+                        image_bytes = await attachment.read()
+                        vision_context = await vision_service.analyze_bytes(
+                            image_bytes,
+                            prompt=content,
+                            content_type=attachment.content_type,
+                            tier="fast",
+                        )
+                        if vision_context:
+                            content = f"[Image attached — vision model says: {vision_context}]\n{content}"
+                            logger.info("[vision_auto] Analyzed attachment for user=%s", str(author))
+                    except Exception as exc:
+                        logger.warning("[vision_auto] Failed to analyze attachment: %s", exc)
+                    break  # Only analyze first image
+
         if attachments:
             for attachment in attachments:
                 if any(attachment.filename.lower().endswith(ext) for ext in ['.wav', '.mp3', '.ogg', '.m4a']):
