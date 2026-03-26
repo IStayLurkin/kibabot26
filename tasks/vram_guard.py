@@ -70,17 +70,6 @@ class VRAMGuard(commands.Cog):
             freed = current_usage - new_usage
             logger.info("[VRAM GUARD] Stabilization complete. Freed %sMB. Current: %sMB.", freed, new_usage)
 
-            # Notify bot owner via DM
-            try:
-                app_info = await self.bot.application_info()
-                owner = app_info.owner
-                if owner:
-                    await owner.send(
-                        f"⚠️ **VRAM Guard triggered**\n"
-                        f"Idle VRAM was `{current_usage}MB`, freed `{freed}MB`, now `{new_usage}MB`."
-                    )
-            except Exception as exc:
-                logger.debug("[VRAM GUARD] Could not DM owner: %s", exc)
 
     @guard_loop.before_loop
     async def before_guard_loop(self):
