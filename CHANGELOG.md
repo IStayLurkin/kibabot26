@@ -5,6 +5,34 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Personality System & Chat Fixes
+
+### New Features
+- **Per-user switchable personalities** — 12 personalities available: `kiba` (default), `analyst`, `roast`, `tutor`, `hype`, `asian`, `dark`, `racist`, `bmw`, `weeb`, `midlife`, `therapist`. Each user sets their own independently — changing yours doesn't affect anyone else's active conversation.
+- **`!personality` command group** added to `runtime_commands.py`:
+  - `!personality` — shows your current personality + list of available
+  - `!personality set <name>` — sets YOUR personality (per-user, persists across restarts)
+  - `!personality reset` — resets yours to server default
+  - `!personality list` — lists all personalities with descriptions
+  - `!personality global <name>` — changes the server-wide default (owner only)
+- **`bot_config` DB table** — generic key-value config store added to `behavior_rules_repository.py` and initialized in `database.py`. Stores active personality per user as `user_personality:{user_id}`.
+
+### Bug Fixes
+- **Filler opener regex ate only the first word, leaving fragments** — `_FILLER_OPENING` in `llm_service.py` matched `"Great"` and stripped it, leaving `"to hear! Your dedication..."` as a dangling fragment. Regex now consumes the entire sentence up to and including the first `[.!?]`.
+- **VRAM Guard sent noisy DM on every trigger** — removed owner DM from `tasks/vram_guard.py`. Guard still runs and logs silently; no more Discord messages on every VRAM spike.
+- **Ollama auto-spawn stacking sessions** — `start_bot.ps1` and `bot.py` both launched `ollama serve` independently, causing multiple stacked Ollama processes that tanked memory. Removed from both. Ollama must be running before starting the bot.
+- **SearXNG port 8080 blocked by Windows Hyper-V reservation** — moved to port 8888 in `docker-compose.yml`, `searxng_config/settings.yml`, and `.env`.
+- **Bot showed as offline (grey circle)** — `change_presence()` now passes an `Activity` object (`listening to !help`) on both initial ready and reconnect events. Without an activity, Discord sometimes renders the bot as offline regardless of status.
+
+### Improvements
+- **Kiba persona tightened** — system prompt now includes explicit VOICE section defining a calm, direct late-20s tone. Added FORBIDDEN entries for theatrical slang (`"Oh honey"`, `"sis"`, `"darlin'"`, `"bestie"`, `"chile"`, `"periodt"`, `"slay"`). Added rule against ending every reply with questions (max 1, only when natural). Added ban on unsolicited advice/warnings.
+- **`therapist` personality reworked** — removed all validation-first therapy structure. Now a direct advisor: reads the specific situation, gives concrete actionable advice, calls out bad patterns plainly, no clichés, no `"I hear you"` filler.
+- **Performance warning thresholds raised** — `SERVICE_WARNING_THRESHOLD_MS` raised from 5000ms → 10000ms; `SERVICE_ERROR_THRESHOLD_MS` from 8000ms → 20000ms. Local 8b model at 5-8s baseline was flooding WARNING logs unnecessarily.
+- **Media generation services excluded from slow-op warnings** — `animatediff`, `cogvideo`, `wan`, `image`, `video`, `voice`, `music` prefixes added to `SUPPRESSED_SERVICE_PREFIXES`. Only unexpected stalls (chat, code) are flagged.
+- **Bot startup cleaned up** — removed `_ollama_is_running()`, `_wait_for_ollama()`, `subprocess` import, `self._ollama_process` attribute, and `close()` teardown from `bot.py`.
+
+---
+
 ## [2026-03-25] — SearXNG Auto-Start
 
 ### New Features

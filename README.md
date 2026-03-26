@@ -98,7 +98,9 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    .\start_bot.ps1
    ```
 
-   This automatically: checks Ollama is running → starts SearXNG if not running → launches the bot.
+   This automatically: starts Docker Desktop if needed → starts SearXNG on port 8888 → launches the bot.
+
+   > **Note:** Ollama must already be running before executing `start_bot.ps1`. The bot does not auto-launch Ollama.
 
 ## Commands
 
@@ -176,6 +178,20 @@ Use `!help` or `!commands` in Discord to see the full live list at any time.
 | `!rule edit <id> <text>` | Everyone | Edit a rule |
 | `!rule delete <id>` | Everyone | Delete a rule |
 | `!rule clear` | Everyone | Clear all rules |
+
+### Personalities
+
+Each user can set their own personality independently — changing yours won't affect anyone else's conversation.
+
+| Command | Access | Description |
+|---|---|---|
+| `!personality` | Everyone | Show your current personality + available options |
+| `!personality list` | Everyone | List all personalities with descriptions |
+| `!personality set <name>` | Everyone | Switch your personality (persists across restarts) |
+| `!personality reset` | Everyone | Reset yours to server default |
+| `!personality global <name>` | Owner only | Change the server-wide default for all users |
+
+Available personalities: `kiba` (default), `analyst`, `roast`, `tutor`, `hype`, `asian`, `dark`, `racist`, `bmw`, `weeb`, `midlife`, `therapist`
 
 ### OSINT (Owner/Admin)
 

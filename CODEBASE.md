@@ -8,7 +8,7 @@ Quick reference for Claude. Point Claude here instead of crawling the repo.
 | File | Purpose |
 |------|---------|
 | `bot.py` | Main entry point, `ExpenseBot(commands.Bot)`, `setup_hook`, `on_message`, cog loading |
-| `start_bot.ps1` | Launch script (Windows) — checks Ollama is running before starting |
+| `start_bot.ps1` | Launch script (Windows) — starts Docker Desktop if needed, starts SearXNG on port 8888, then launches bot. Ollama must already be running. |
 | `watch_bot.ps1` | Auto-restart watcher |
 | `kiba.modelfile` | Ollama model definition — Dolphin 3.0 q8_0 base, kiba personality. Never greets or volunteers date/time unprompted. |
 
@@ -36,7 +36,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `agent_commands.py` | `!agent on/off/status`, `!osint`, `!whois`, `!domain` | OSINT outputs truncated to 1900 chars before Discord code block wrapper. |
 | `media_commands.py` | `!image`/`!img`, `!tts`/`!say`, `!video`/`!animate`, `!melody`/`!music`/`!tune`, `!song`/`!vocals`/`!sing` | All five send sites check file size ≤25MB before `discord.File()`. |
 | `code_commands.py` | Code execution commands. `!code run` has a 3/60s per-user cooldown. `!code read` truncation uses `CODE_MAX_OUTPUT_CHARS` from config. | — |
-| `runtime_commands.py` | `!model`, `!imagemodel`, `!audiomodel` groups + `!cuda`/`!gpu`, `!commands`, `!help`, `!rule` group. No duplicate `switch` subcommands. | — |
+| `runtime_commands.py` | `!model`, `!imagemodel`, `!audiomodel` groups + `!cuda`/`!gpu`, `!commands`, `!help`, `!rule` group, `!personality` group. No duplicate `switch` subcommands. | — |
 | `dev_commands.py` | Developer/debug commands | — |
 | `budget_commands.py` | Budget tracking | — |
 | `expense_commands.py` | Expense tracking | — |
@@ -79,6 +79,11 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `!cuda` / `!gpu` | anyone | CUDA and GPU status |
 | `!help [command]` | anyone | Dynamic help — lists all commands or details for one |
 | `!commands` / `!cmds` | anyone | Full command list |
+| `!personality` | anyone | Show your current personality |
+| `!personality set <name>` | anyone | Set your personal personality (per-user, persists) |
+| `!personality reset` | anyone | Reset yours to server default |
+| `!personality list` | anyone | List all personalities with descriptions |
+| `!personality global <name>` | owner | Set the server-wide default personality |
 | `!update` | owner | Git pull + restart |
 | `!reload <cog>` | owner | Hot-reload a cog |
 | `!reloadall` | owner | Reload all managed extensions |
@@ -88,7 +93,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 ## services/
 | File | Purpose | Notes |
 |------|---------|-------|
-| `llm_service.py` | Core LLM — provider chain (ollama → hf), `generate_reply`, `generate_agent_reply`, `enhance_image_prompt` | Circuit breakers per provider. `_build_provider_chain()` filters tripped providers. |
+| `llm_service.py` | Core LLM — provider chain (ollama → hf), `generate_reply`, `generate_agent_reply`, `enhance_image_prompt` | Circuit breakers per provider. `_build_provider_chain()` filters tripped providers. `PERSONALITIES` dict holds 12 named system prompts. `generate_reply()` accepts `personality` param; `_build_messages()` resolves it: per-call arg → `active_personality` instance fallback. `_FILLER_OPENING` regex strips full sentence (not just opener word) to prevent dangling fragments. |
 | `circuit_breaker.py` | Per-provider failure tracking — opens after 3 failures, recovers after 2min cooldown | Used inside `LLMService`. |
 | `chat_service.py` | Chat pipeline — memory, context, routing to `LLMService` | Builds full context: system prompt + memories + summary + history. |
 | `chat_router.py` | Routes messages to correct service | — |
@@ -107,7 +112,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `code_execution_service.py` | Sandboxed code execution. `DANGEROUS_PATTERNS` lowercased at definition — includes `requests`, `pickle.loads/load`, `eval`, `exec`, `subprocess`, etc. Uses full path in subprocess command. | — |
 | `osint_service.py` | OSINT wrapper — WHOIS, DNS, SSL | — |
 | `behavior_rule_service.py` | Persistent behavior rules. `extract_rule_replacement` safely guards the `" to "` split — returns `("", "")` if delimiter not present. | — |
-| `performance_service.py` | Perf tracking / latency metrics | — |
+| `performance_service.py` | Perf tracking / latency metrics | `SERVICE_WARNING_THRESHOLD_MS=10000`, `SERVICE_ERROR_THRESHOLD_MS=20000`. Media generation prefixes (`animatediff`, `cogvideo`, `wan`, `image`, `video`, `voice`, `music`) suppressed from slow-op warnings. |
 | `tool_router.py` | Routes tool-use requests. `detect_tool` correctly skips image detection for non-media requests. Clarifying question threshold is ≤2 words — applied to the **full lowercased message**, not extracted intent. "draw a cat" (3 words) does not trigger clarification. Code markers are language-specific (`python`, `def `, `function(`, etc.) — not generic words like `class`/`bug`. | — |
 | `time_service.py` | Datetime context for prompts | — |
 | `command_help_service.py` | Dynamic help text. `build_command_overview` lists Group parent commands (e.g. `!model ...`) with subcommands indented beneath. `SECTION_LABELS` includes `VideoCommands → "Video Generation"`. | — |
@@ -126,7 +131,7 @@ Shared connection via `db_connection.py`. WAL mode enabled. Do not open new `aio
 | `database.py` | SQLite init, `init_db()` — expense and budget tables |
 | `chat_memory.py` | Chat sessions, messages, user memory, summaries, conversation state, cooldowns, allowed channels. All functions use `get_db()`. |
 | `model_registry.py` | Model registry — `upsert_model`, `list_models`, `get_runtime_settings` |
-| `behavior_rules_repository.py` | Persistent behavior rules store |
+| `behavior_rules_repository.py` | Persistent behavior rules store + `bot_config` table (generic key-value). `get_bot_config(key, default)` / `set_bot_config(key, value)`. Active personality stored as `user_personality:{user_id}` and `active_personality` (global default). |
 | `budget_repository.py` | Budget data |
 | `execution_repository.py` | Code execution history |
 
@@ -147,7 +152,7 @@ Shared connection via `db_connection.py`. WAL mode enabled. Do not open new `aio
 | File | Purpose |
 |------|---------|
 | `task_manager.py` | Starts/stops all background tasks |
-| `vram_guard.py` | 5-min loop — fires at 16GB idle VRAM. Respects `bot.generating_count`. DMs owner on trigger. |
+| `vram_guard.py` | 5-min loop — fires at 16GB idle VRAM. Respects `bot.generating_count`. Logs silently (owner DM removed). |
 | `health_tasks.py` | Periodic ping/health logging |
 
 ---
