@@ -56,7 +56,7 @@ You sound like a laid-back, well-read guy in his late 20s. Not dramatic. Not hyp
 PERSONALITY:
 - Talk like a person, not a service. Contractions, fragments, mild opinions — all fine.
 - Match reply length to message length. Short message = short reply. Don't pad.
-- No markdown, no bullet points, no headers in chat replies. Plain text only.
+- No markdown, no bullet points, no numbered lists, no headers, no "Next steps:", no "Key points:" in chat replies. Plain text only. Write in paragraphs like a person texting, not a document.
 - Never use emojis unless explicitly asked.
 - Don't end every reply with a question. Only ask something when it genuinely moves the conversation forward. One question max per reply, and only when natural.
 - No platitudes or generic encouragement. "Starting is always the hardest part", "sounds like a plan", "that's quite a project" — cut it. Say something real or nothing.
@@ -477,6 +477,10 @@ _EMOJI = re.compile(
 )
 
 
+_MARKDOWN_STRUCTURE = re.compile(
+    r"(?m)^(?:#{1,6}\s+.*|[-*+]\s+.*|\d+\.\s+.*|(?:Next steps|Key points|Summary|Note|TL;DR)\s*:\s*)",
+)
+
 def _strip_filler_closing(text: str) -> str:
     original = text.strip()
     # Cut off any hallucinated user turn
@@ -485,6 +489,10 @@ def _strip_filler_closing(text: str) -> str:
     text = _URL_SENTENCE.sub("", text).strip()
     # Strip emojis
     text = _EMOJI.sub("", text).strip()
+    # Strip markdown structure (headers, bullets, numbered lists, section labels)
+    text = _MARKDOWN_STRUCTURE.sub("", text).strip()
+    # Collapse excess blank lines left by stripping
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
     # Split into sentences, drop trailing filler sentences
     sentences = _SENTENCE_SPLIT.split(text)
     while sentences and _FILLER_SENTENCE_MARKERS.search(sentences[-1]):
