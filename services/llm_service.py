@@ -971,17 +971,6 @@ class LLMService:
                         (time.perf_counter() - started_at) * 1000,
                     )
 
-                finish_reason = getattr(response.choices[0], "finish_reason", "unknown")
-                usage = self._extract_usage(response)
-                logger.debug(
-                    "[llm_call] provider=%s finish_reason=%s in=%d out=%d total=%d",
-                    provider, finish_reason,
-                    usage.get("input_tokens", 0),
-                    usage.get("output_tokens", 0),
-                    usage.get("total_tokens", 0),
-                )
-                if finish_reason == "length":
-                    logger.warning("[llm_call] Response truncated by max_tokens=%d (in=%d out=%d)", self.max_tokens, usage.get("input_tokens", 0), usage.get("output_tokens", 0))
                 content = _extract_message_text(response.choices[0].message)
                 if content and content.strip():
                     self._circuit_breakers.get(provider, CircuitBreaker()).record_success()
