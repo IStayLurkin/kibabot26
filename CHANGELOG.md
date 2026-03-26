@@ -5,6 +5,24 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Help System & Final Bug Pass
+
+### Bug Fixes
+- **`VideoCommands` missing from help section labels** — `!cogvideo2b`, `!cogvideo5b`, `!animatediff`, `!wan` were displayed under the raw cog class name `"VideoCommands"` instead of a human-readable header. Now shows **"Video Generation"**.
+- **Group parent commands invisible in `!help`** — `build_command_overview` iterated into subcommands and skipped the parent, so `!model`, `!imagemodel`, `!audiomodel`, `!rule`, and `!code` were completely absent. Now each group is listed with its subcommands indented beneath it.
+- **`music_service` inconsistent failure returns** — `generate_melody` and `generate_song_clip` returned `None` on `TimeoutError` but `""` on all other exceptions. Unified to `None` on all failure paths; return types updated to `Optional[str]`.
+- **`chat_service` passed `None` into `file_paths`** — when melody generation failed, `None` was placed directly in the `ChatReply.file_paths` list. Added null guard before building the reply.
+- **`image_service` crashed with `AttributeError` on missing optional import** — if `diffusers`/`transformers` were not installed, `Flux2Transformer2DModel` and friends were `None`; calling `.from_pretrained()` on `None` produced an unhelpful `AttributeError`. Both `_load_flux()` and `_load_sdxl()` now raise a clear `RuntimeError` up front.
+- **Fire-and-forget tasks in `image_service` and `voice_service` swallowed exceptions** — `_inactivity_monitor` and `_stt_inactivity_monitor` tasks had no done-callbacks; any exception was silently lost. Added `_on_monitor_done` / `_on_stt_monitor_done` static callbacks that log via `logger.exception`.
+- **Piper process not killed on general `Exception`** — the `proc.kill()` / `proc.wait()` cleanup block only ran on `TimeoutError`. If `create_subprocess_exec` or `communicate` raised anything else, the process was left running. Kill logic now also runs in the `except Exception` branch.
+- **`import torch, gc` inside `_stt_inactivity_monitor`** — deferred imports inside a method body can mask `ImportError` at unexpected times. Moved to module-level `try/except ImportError` block; `torch` is `None`-guarded where used.
+- **`discord.File` opened without verifying file exists** — `handle_image_request` checked `if path:` but not `if Path(path).exists()`. If the output file was deleted between generation and upload, `discord.File()` would raise. Changed to `if path and Path(path).exists():`.
+
+### Changes
+- **`"Image Controls"` section renamed to `"Media"`** — `MediaCommands` covers TTS, music, and video routing in addition to images; the old label was misleading.
+
+---
+
 ## [2026-03-25] — Quality & Reliability Improvements
 
 ### New Features
