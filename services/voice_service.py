@@ -19,6 +19,7 @@ except ImportError:
     torch = None
 
 from core.config import MEDIA_SAFETY_MODE
+from core.executors import HEAVY_EXECUTOR
 from core.feature_flags import MEDIA_OUTPUT_DIR
 from services.media_safety_service import format_media_error, is_moderation_error
 
@@ -33,6 +34,7 @@ class VoiceService:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         # 2026 Hardware Optimization: Using 3090 Ti for Whisper inference
         self.stt_model = None  # Lazy-loaded on first use
+        self._stt_lock = asyncio.Lock()  # Prevents double-init on concurrent STT calls
         self._stt_last_used: float = 0.0
         self._stt_unload_task = None
         self._STT_IDLE_SECONDS = 300  # Unload Whisper after 5 min idle
@@ -43,15 +45,15 @@ class VoiceService:
         2026 Expansion: Converts user voice to text using local GPU.
         Decoupled from main loop to prevent stream lag.
         """
-        if self.stt_model is None:
-            self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
+        async with self._stt_lock:
+            if self.stt_model is None:
+                self.stt_model = WhisperModel("base", device="cuda", compute_type="float16")
         started_at = time.perf_counter()
         loop = asyncio.get_running_loop()
         def transcribe():
             segments, _info = self.stt_model.transcribe(audio_path, beam_size=5)
             return " ".join([s.text for s in segments])
 
-        from core.executors import HEAVY_EXECUTOR
         result = await asyncio.wait_for(
             loop.run_in_executor(HEAVY_EXECUTOR, transcribe),
             timeout=120.0,

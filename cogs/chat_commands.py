@@ -118,7 +118,7 @@ class ChatCommands(commands.Cog):
         )
         
         bar_length = 15
-        filled = int((used_vram / total_vram) * bar_length)
+        filled = int((used_vram / total_vram) * bar_length) if total_vram > 0 else 0
         vram_bar = "█" * filled + "░" * (bar_length - filled)
         
         embed.add_field(name="Current Active Engine", value=f"**{active_engine}**", inline=False)
@@ -240,7 +240,10 @@ class ChatCommands(commands.Cog):
             await ctx.send(content=f"Request: *{enhanced_prompt}* ({mode} Engine)", file=image_file)
 
             # Archive to Gallery
-            gallery_channel = self.bot.get_channel(int(GALLERY_CHANNEL_ID)) if GALLERY_CHANNEL_ID else None
+            try:
+                gallery_channel = self.bot.get_channel(int(GALLERY_CHANNEL_ID)) if GALLERY_CHANNEL_ID else None
+            except (ValueError, TypeError):
+                gallery_channel = None
             if gallery_channel:
                 archive_file = discord.File(path, filename=f"archive_{mode.lower()}.png")
                 await gallery_channel.send(

@@ -172,9 +172,11 @@ class MusicService:
                 lf.write(lyrics_text)
                 lyrics_file = lf.name
 
-            venv_python = str(Path(__file__).resolve().parents[1] / ".venv" / "Scripts" / "python.exe")
-            cmd = [
-                venv_python, "infer.py",
+            venv_python = Path(__file__).resolve().parents[1] / ".venv" / "Scripts" / "python.exe"
+            if not venv_python.exists():
+                logger.error("YuE venv python not found at %s", venv_python)
+                return ""
+            cmd = [str(venv_python), "infer.py",
                 "--cuda_idx", "0",
                 "--stage1_model", YUE_STAGE1_MODEL,
                 "--stage2_model", YUE_STAGE2_MODEL,

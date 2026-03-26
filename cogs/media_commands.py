@@ -13,6 +13,17 @@ from services.video_service import VideoService
 from services.voice_service import VoiceService
 
 
+_DISCORD_FILE_LIMIT_BYTES = 25 * 1024 * 1024  # 25 MB — standard server limit
+
+
+def _check_file_size(path: str) -> bool:
+    """Returns True if file is within Discord's upload limit."""
+    try:
+        return Path(path).stat().st_size <= _DISCORD_FILE_LIMIT_BYTES
+    except OSError:
+        return False
+
+
 class MediaCommands(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -63,7 +74,10 @@ class MediaCommands(commands.Cog):
             try:
                 image_path = await self.image_service.generate_image(prompt)
                 if image_path and Path(image_path).exists():
-                    await ctx.send(file=discord.File(image_path, filename=Path(image_path).name))
+                    if not _check_file_size(image_path):
+                        await ctx.send("❌ Generated image is too large to upload (>25MB).")
+                    else:
+                        await ctx.send(file=discord.File(image_path, filename=Path(image_path).name))
                 else:
                     await ctx.send("❌ Image generation failed. Check VRAM availability.")
             except Exception as exc:
@@ -89,7 +103,10 @@ class MediaCommands(commands.Cog):
             try:
                 audio_path = await self.voice_service.text_to_speech(text)
                 if audio_path and Path(audio_path).exists():
-                    await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+                    if not _check_file_size(audio_path):
+                        await ctx.send("❌ TTS audio is too large to upload (>25MB).")
+                    else:
+                        await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
                 else:
                     await ctx.send("❌ TTS failed. Check terminal.")
             except Exception as exc:
@@ -115,7 +132,10 @@ class MediaCommands(commands.Cog):
             try:
                 video_path = await self.video_service.generate_video(prompt)
                 if video_path and Path(video_path).exists():
-                    await ctx.send(file=discord.File(video_path, filename=Path(video_path).name))
+                    if not _check_file_size(video_path):
+                        await ctx.send("❌ Generated video is too large to upload (>25MB). Check outputs folder.")
+                    else:
+                        await ctx.send(file=discord.File(video_path, filename=Path(video_path).name))
                 else:
                     await ctx.send("❌ Video generation failed. Check VRAM availability.")
             except NotImplementedError as exc:
@@ -143,7 +163,10 @@ class MediaCommands(commands.Cog):
             try:
                 melody_path = await self.music_service.generate_melody(prompt)
                 if melody_path and Path(melody_path).exists():
-                    await ctx.send(file=discord.File(melody_path, filename=Path(melody_path).name))
+                    if not _check_file_size(melody_path):
+                        await ctx.send("❌ Generated audio is too large to upload (>25MB).")
+                    else:
+                        await ctx.send(file=discord.File(melody_path, filename=Path(melody_path).name))
                 else:
                     await ctx.send("❌ Melody generation failed. Check VRAM availability.")
             except Exception as exc:
@@ -175,7 +198,10 @@ class MediaCommands(commands.Cog):
                     lyrics=prompt.split(".", 1)[1].strip() if "." in prompt else prompt,
                 )
                 if audio_path and Path(audio_path).exists():
-                    await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
+                    if not _check_file_size(audio_path):
+                        await ctx.send("❌ Generated song is too large to upload (>25MB). Check outputs folder.")
+                    else:
+                        await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
                 else:
                     await ctx.send("❌ Song generation failed. Check VRAM availability and YuE repo path.")
             except Exception as exc:

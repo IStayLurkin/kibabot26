@@ -69,14 +69,16 @@ class AgentDispatcher:
         media_triggers = {"draw", "generate", "image", "visual", "flux"}
 
         if music_triggers & words:
-            if not creative_override and "real" in words:
-                return "chat"
-            return "sing"
+            # "real music" / "real song" etc. — user wants actual generated audio, not chat
+            # Only route to chat if creative_override is explicitly absent AND "real" is absent
+            if creative_override or "real" not in words:
+                return "sing"
+            return "chat"
 
         if media_triggers & words or "create a picture" in lowered:
-            if not creative_override and "real" in words:
-                return "chat"
-            return "draw"
+            if creative_override or "real" not in words:
+                return "draw"
+            return "chat"
 
         return "chat"
 
@@ -183,5 +185,9 @@ class AgentDispatcher:
             "file_path": None,
             "display_name": display_name or user_id,
         }
-        result = await self.workflow.ainvoke(inputs)
+        try:
+            result = await asyncio.wait_for(self.workflow.ainvoke(inputs), timeout=120.0)
+        except asyncio.TimeoutError:
+            logger.error("[AgentDispatcher] workflow.ainvoke timed out after 120s for user=%s", user_id)
+            return "❌ Agent timed out. Try again.", None
         return result["messages"][-1], result.get("file_path")
