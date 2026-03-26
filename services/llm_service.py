@@ -526,13 +526,12 @@ def _sanitize_model_text(content: str) -> str:
     # \[...\] and \\[...\\] — match the backslash(es) + bracket as a unit
     cleaned = re.sub(r"\\+\[(.+?)\\+\]", r"\1", cleaned, flags=re.DOTALL)
     cleaned = re.sub(r"\\+\((.+?)\\+\)", r"\1", cleaned)
-    # Strip any remaining lone backslashes left over
-    cleaned = re.sub(r"\\(?=[^a-zA-Z])", "", cleaned)
     # Strip common LaTeX commands, keep the content
     cleaned = re.sub(r"\\(?:frac|sqrt|left|right|cdot|nabla|Delta|partial|rho|nu|sigma|alpha|beta|gamma|theta|lambda|mu|pi|tau|phi|psi|omega)\b\s*", "", cleaned)
     cleaned = re.sub(r"\\[a-zA-Z]+\{([^}]*)\}", r"\1", cleaned)  # \cmd{content} → content
     cleaned = re.sub(r"\\[a-zA-Z]+\s*", "", cleaned)              # remaining \commands
-    cleaned = re.sub(r"[{}_^]", " ", cleaned)                      # braces, sub/superscript
+    # Remove only curly braces — keep _ and ^ so P_a stays P_a not P a
+    cleaned = re.sub(r"[{}]", "", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     cleaned = re.sub(r"  +", " ", cleaned)
     return cleaned.strip()
@@ -779,7 +778,14 @@ class LLMService:
         ]
         try:
             raw = self._complete_messages_sync(prompt, temperature=0.0, max_tokens=150)
-            parsed = json.loads(raw.strip())
+            parsed = _extract_json_object(raw)
+            if parsed is None:
+                # fallback: try stripping to first JSON object
+                stripped = raw.strip()
+                start = stripped.find("{")
+                end = stripped.rfind("}") + 1
+                if start >= 0 and end > start:
+                    parsed = json.loads(stripped[start:end])
             if isinstance(parsed, dict) and "should_store" in parsed:
                 return parsed
             return {"should_store": False, "content": ""}
