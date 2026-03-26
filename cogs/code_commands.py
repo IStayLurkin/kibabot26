@@ -3,15 +3,15 @@ from __future__ import annotations
 from discord.ext import commands
 
 from core.config import CODE_MAX_OUTPUT_CHARS
+from core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class CodeCommands(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.code_service = getattr(bot, "code_execution_service", None)
-
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        return self.code_service is not None
 
     async def ensure_authorized(self, ctx: commands.Context) -> bool:
         if self.code_service is None:
@@ -180,6 +180,7 @@ class CodeCommands(commands.Cog):
                     for i in range(0, len(result), 1900):
                         await ctx.send(result[i : i + 1900])
             except Exception as exc:
+                logger.error("[code_ask] Error: %s", exc)
                 await ctx.send(f"Code ask error: {exc}")
 
 

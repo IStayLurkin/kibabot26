@@ -25,6 +25,7 @@ class CodegenService:
     def __init__(self, llm_service: Any | None = None, performance_tracker=None) -> None:
         self.llm_service = llm_service
         self.performance_tracker = performance_tracker
+        self._ask_client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY)
 
     async def generate_code_help(self, prompt: str) -> str:
         started_at = time.perf_counter()
@@ -82,7 +83,6 @@ class CodegenService:
             if len(cleaned) > MAX_CODE_REQUEST_LENGTH:
                 return f"Keep the code request under {MAX_CODE_REQUEST_LENGTH} characters."
             model = CODING_TIERS.get(tier, CODING_FAST_MODEL)
-            client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY)
             messages = [
                 {
                     "role": "system",
@@ -92,7 +92,7 @@ class CodegenService:
             ]
 
             def _call():
-                resp = client.chat.completions.create(
+                resp = self._ask_client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=0.2,
