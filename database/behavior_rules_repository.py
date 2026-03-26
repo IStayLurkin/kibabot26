@@ -90,3 +90,30 @@ async def clear_behavior_rules():
     db = await get_db()
     await db.execute("DELETE FROM behavior_rules")
     await db.commit()
+
+
+async def init_bot_config_db():
+    db = await get_db()
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS bot_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    await db.commit()
+
+
+async def get_bot_config(key: str, default: str = "") -> str:
+    db = await get_db()
+    cursor = await db.execute("SELECT value FROM bot_config WHERE key = ?", (key,))
+    row = await cursor.fetchone()
+    return row[0] if row else default
+
+
+async def set_bot_config(key: str, value: str) -> None:
+    db = await get_db()
+    await db.execute(
+        "INSERT INTO bot_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    await db.commit()

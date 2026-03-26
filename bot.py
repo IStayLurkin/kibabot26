@@ -167,6 +167,11 @@ class ExpenseBot(commands.Bot):
             behavior_rule_service=self.behavior_rule_service,
             search_service=self.search_service,
         )
+        from database.behavior_rules_repository import get_bot_config
+        from services.llm_service import PERSONALITIES, DEFAULT_PERSONALITY
+        saved_personality = await get_bot_config("active_personality", DEFAULT_PERSONALITY)
+        if saved_personality in PERSONALITIES:
+            self.llm_service.active_personality = saved_personality
         _embed_base = OLLAMA_BASE_URL[:-3] if OLLAMA_BASE_URL.endswith("/v1") else OLLAMA_BASE_URL
         embedding_service = EmbeddingService(base_url=_embed_base, model="nomic-embed-text")
         self.vector_memory_service = VectorMemoryService(embedding_service=embedding_service, top_k=5)

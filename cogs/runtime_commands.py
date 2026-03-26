@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from discord.ext import commands
+from database.behavior_rules_repository import get_bot_config, set_bot_config
+from services.llm_service import PERSONALITIES, DEFAULT_PERSONALITY
 
 _RUNTIME_UNAVAILABLE = "❌ Model runtime service is not available."
 
@@ -224,6 +226,32 @@ class RuntimeCommands(commands.Cog):
     async def rule_clear(self, ctx: commands.Context):
         _ok, message = await self.behavior_rule_service.reset_rules()
         await ctx.send(message)
+
+
+    @commands.group(name="personality", invoke_without_command=True, help="Switch or view Kiba's active personality.")
+    async def personality_group(self, ctx: commands.Context):
+        llm = getattr(self.bot, "llm_service", None)
+        current = getattr(llm, "active_personality", DEFAULT_PERSONALITY)
+        names = ", ".join(f"`{k}`" for k in PERSONALITIES)
+        await ctx.send(f"Active personality: `{current}`\nAvailable: {names}\n\nUse `!personality set <name>` to switch.")
+
+    @personality_group.command(name="list", help="List available personalities.")
+    async def personality_list(self, ctx: commands.Context):
+        lines = [f"`{name}` — {prompt.strip().splitlines()[1].strip()}" for name, prompt in PERSONALITIES.items()]
+        await ctx.send("\n".join(lines))
+
+    @personality_group.command(name="set", aliases=["switch"], help="Switch to a different personality.")
+    async def personality_set(self, ctx: commands.Context, *, name: str):
+        name = name.lower().strip()
+        if name not in PERSONALITIES:
+            names = ", ".join(f"`{k}`" for k in PERSONALITIES)
+            return await ctx.send(f"Unknown personality `{name}`. Available: {names}")
+        llm = getattr(self.bot, "llm_service", None)
+        if llm is None:
+            return await ctx.send("❌ LLM service not available.")
+        llm.active_personality = name
+        await set_bot_config("active_personality", name)
+        await ctx.send(f"Switched to `{name}` personality.")
 
 
 async def setup(bot: commands.Bot) -> None:
