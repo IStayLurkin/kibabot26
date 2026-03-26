@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import discord
 from discord.ext import commands
 
 from core.config import THINKING_FAST_MODEL, THINKING_BEST_MODEL
@@ -43,7 +42,6 @@ class ThinkingCommands(commands.Cog):
         if len(prompt) > MAX_THINK_LENGTH:
             await ctx.send(f"Prompt too long. Keep it under {MAX_THINK_LENGTH} characters.")
             return
-        model = THINKING_TIERS.get(tier, THINKING_FAST_MODEL)
         async with ctx.typing():
             try:
                 result = await service.think(prompt, tier=tier)
