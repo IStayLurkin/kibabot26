@@ -32,9 +32,9 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 
 | File | Commands | Notes |
 |------|----------|-------|
-| `chat_commands.py` | `!chat`, `!ask`, `!status`, `!hardware`, `!boost`, `!draw`, `!fast`, `!dossier`, `!studio`, `!ping`, `!about`, `!forget`, `!purge`, `!models`, `!allow`, `!deny` | Main AI chat entry point. `handle_natural_chat` → `handle_chat_turn`. Streaming-style reply delivery for long responses. |
-| `agent_commands.py` | Agentic task commands | — |
-| `media_commands.py` | Image/video/audio generation commands | — |
+| `chat_commands.py` | `!status`/`!kiba`/`!kb`, `!hardware`, `!boost`, `!draw`, `!fast`, `!dossier`, `!studio`, `!forget`, `!forgetall`, `!purge`, `!models`, `!allow`, `!deny` | Main AI chat entry point. `handle_natural_chat` → `handle_chat_turn`. Streaming-style reply delivery for long responses. VRAM bar guards `total_vram == 0`. `GALLERY_CHANNEL_ID` int() wrapped in try/except. |
+| `agent_commands.py` | `!agent on/off/status`, `!osint`, `!whois`, `!domain` | OSINT outputs truncated to 1900 chars before Discord code block wrapper. |
+| `media_commands.py` | `!image`/`!img`, `!tts`/`!say`, `!video`/`!animate`, `!melody`/`!music`/`!tune`, `!song`/`!vocals`/`!sing` | All five send sites check file size ≤25MB before `discord.File()`. |
 | `code_commands.py` | Code execution commands. `!code run` has a 3/60s per-user cooldown. `!code read` truncation uses `CODE_MAX_OUTPUT_CHARS` from config. | — |
 | `runtime_commands.py` | `!model`, `!imagemodel`, `!audiomodel` groups + `!cuda`/`!gpu`, `!commands`, `!help`, `!rule` group. No duplicate `switch` subcommands. | — |
 | `dev_commands.py` | Developer/debug commands | — |
@@ -48,16 +48,40 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `!status` / `!kiba` / `!kb` | anyone | GPU dashboard — VRAM, active engine, session count |
 | `!hardware` | anyone | Real-time nvidia-smi stats |
 | `!boost` | anyone | Manual VRAM cache clear |
-| `!vram` | owner | VRAM status check |
 | `!draw <prompt>` | anyone | FLUX.2 image generation (prompt auto-enhanced via Ollama) |
 | `!fast <prompt>` | anyone | SDXL image generation (prompt auto-enhanced via Ollama) |
+| `!image <prompt>` / `!img` | anyone | Alias for `!draw` via MediaCommands cog |
+| `!tts <text>` / `!say` | anyone | Text-to-speech via Piper |
+| `!video <prompt>` / `!animate` | anyone | Video generation (CogVideoX default backend) |
+| `!melody <prompt>` / `!music` / `!tune` | anyone | Instrumental audio via StableAudio |
+| `!song <vibe>. <lyrics>` / `!vocals` / `!sing` | anyone | Full vocal track via YuE (~6 min) |
+| `!cogvideo2b <prompt>` | anyone | CogVideoX-2b video generation |
+| `!cogvideo5b <prompt>` | anyone | CogVideoX-5b video generation |
+| `!animatediff <prompt>` | anyone | AnimateDiff video generation |
+| `!wan <prompt>` | anyone | Wan2.1 video generation |
 | `!models` | anyone | Lists Ollama models currently loaded in VRAM |
 | `!forget` | anyone | Wipes own chat history + memory in current channel |
+| `!forgetall @user` | owner | Full memory wipe — chat, summary, KV, vector/RAG |
 | `!purge` | owner | Wipes all history for every user in current channel |
 | `!allow [channel]` | owner | Add channel to allowed list (no restart needed) |
 | `!deny [channel]` | owner | Remove channel from allowed list (no restart needed) |
 | `!dossier <target>` | anyone | OSINT research loop (60s cooldown) |
-| `!studio bpm/voice/mode <val>` | anyone | Update music generation settings |
+| `!studio bpm/voice/mode <val>` | owner | Update music generation settings |
+| `!osint <query>` | owner/admin | OSINT lookup |
+| `!whois <domain>` | owner/admin | WHOIS lookup |
+| `!domain <domain>` | owner/admin | DNS + SSL info |
+| `!agent on/off/status` | owner/admin | Toggle agentic mode per channel |
+| `!model [list/set/sync/...]` | anyone | LLM model management group |
+| `!imagemodel [...]` | anyone | Image model management group |
+| `!audiomodel [...]` | anyone | Audio model management group |
+| `!rule [add/edit/delete/clear]` | anyone | Persistent bot behavior rules |
+| `!code [create/edit/run/read/list/delete/output]` | allowed users | Sandboxed Python execution |
+| `!cuda` / `!gpu` | anyone | CUDA and GPU status |
+| `!help [command]` | anyone | Dynamic help — lists all commands or details for one |
+| `!commands` / `!cmds` | anyone | Full command list |
+| `!update` | owner | Git pull + restart |
+| `!reload <cog>` | owner | Hot-reload a cog |
+| `!reloadall` | owner | Reload all managed extensions |
 
 ---
 
@@ -69,14 +93,14 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `chat_service.py` | Chat pipeline — memory, context, routing to `LLMService` | Builds full context: system prompt + memories + summary + history. |
 | `chat_router.py` | Routes messages to correct service | — |
 | `agent_service.py` | Agentic loop logic | — |
-| `agent_dispatcher.py` | Dispatches agent tool calls. Increments `bot.generating_count` during media generation. | `generating_count` is incremented before `try`, decremented in `finally` — both `media_node` and `music_agent_node`. Increment and `try` are adjacent with no `await` between them, so the decrement always runs on any exception. No leak. |
+| `agent_dispatcher.py` | Dispatches agent tool calls. Increments `bot.generating_count` during media generation. | `generating_count` is incremented before `try`, decremented in `finally` — both `media_node` and `music_agent_node`. Increment and `try` are adjacent with no `await` between them, so the decrement always runs on any exception. No leak. `workflow.ainvoke()` wrapped in `asyncio.wait_for(timeout=120s)` — stall returns a clean error message. `classify_intent()`: music/draw triggers route to generation unless `"real"` is absent AND creative override is absent — "real" means generate it for real. `music_agent_node` extracts BPM from prompt, splits vibe/lyrics on `.`, falls back to service config defaults. |
 | `model_runtime_service.py` | Runtime state — active provider/model, hardware status | `initialize()` fetches hardware once, passes to `sync_models` to avoid duplicate probes. |
 | `model_storage_service.py` | Model storage, ollama pull | — |
 | `hardware_service.py` | CUDA/VRAM/Ollama availability checks. `get_vram_usage_mb()` via nvidia-smi. `get_ollama_running_models()` via `/api/ps`. | All blocking calls wrapped in `asyncio.to_thread`. |
-| `image_service.py` | FLUX.2 (4-bit) and SDXL (FP16) generation. Auto-purges after 5min idle. | Uses `HEAVY_EXECUTOR`. `asyncio.Lock` acquired before dispatch. SDXL VAE cast to float32 at load time. |
-| `voice_service.py` | Piper TTS + Faster-Whisper STT. Whisper lazy-loaded, auto-unloads after 5min idle. | STT uses `HEAVY_EXECUTOR`. |
+| `image_service.py` | FLUX.2 (4-bit) and SDXL (FP16) generation. Auto-purges after 5min idle. | Uses `HEAVY_EXECUTOR`. `asyncio.Lock` acquired before dispatch. SDXL VAE cast to float32 at load time. `_load_flux()`/`_load_sdxl()` raise `RuntimeError` immediately if optional diffusers imports failed (prevents cryptic `AttributeError` on `None`). Inactivity monitor task has done-callback for exception visibility. |
+| `voice_service.py` | Piper TTS + Faster-Whisper STT. Whisper lazy-loaded, auto-unloads after 5min idle. | STT uses `HEAVY_EXECUTOR`. `_stt_lock` (asyncio.Lock) prevents double-init of WhisperModel on concurrent calls. Piper process killed in both `TimeoutError` and general `Exception` handlers. STT inactivity monitor task has done-callback for exception visibility. |
 | `video_service.py` | Video generation stub (disabled) | — |
-| `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject reads the live model name from `model_runtime_service.get_active_llm_model()`, falls back to `OLLAMA_MODEL` config if runtime unavailable. Pass `runtime_service=` at construction. |
+| `music_service.py` | StableAudio (melody) + YuE subprocess (full songs). `clear_vram()` called after every generation. Ejects Ollama model before loading. | Uses `HEAVY_EXECUTOR`. Ollama eject reads the live model name from `model_runtime_service.get_active_llm_model()`, falls back to `OLLAMA_MODEL` config if runtime unavailable. Pass `runtime_service=` at construction. YuE validates `.venv/Scripts/python.exe` exists before subprocess. Both generation methods return `Optional[str]` — `None` on all failure paths. |
 | `memory_service.py` | Short/long-term memory read/write. Memory values >20 words are skipped (logged at DEBUG). `blocked_memory_keys` is an exact-match set on the LLM-extracted `memory_key`: `{"income", "salary", "budget", "budget_categories", "groceries", "rent", "fun_money", "extra"}`. Not substring matching — the full key must match. | — |
 | `summary_service.py` | Conversation summarization. Summaries capped at 1500 chars before storage. Triggers after `CHAT_SUMMARY_MIN_MESSAGES=10`. Known: if the bot restarts mid-summarization, the partial summary write is silently dropped — the previous summary remains. Low severity; next message cycle will re-trigger. | — |
 | `codegen_service.py` | Code generation | — |
@@ -86,7 +110,7 @@ Discord command handlers. All loaded in `bot.py:setup_hook`.
 | `performance_service.py` | Perf tracking / latency metrics | — |
 | `tool_router.py` | Routes tool-use requests. `detect_tool` correctly skips image detection for non-media requests. Clarifying question threshold is ≤2 words — applied to the **full lowercased message**, not extracted intent. "draw a cat" (3 words) does not trigger clarification. Code markers are language-specific (`python`, `def `, `function(`, etc.) — not generic words like `class`/`bug`. | — |
 | `time_service.py` | Datetime context for prompts | — |
-| `command_help_service.py` | Dynamic help text | — |
+| `command_help_service.py` | Dynamic help text. `build_command_overview` lists Group parent commands (e.g. `!model ...`) with subcommands indented beneath. `SECTION_LABELS` includes `VideoCommands → "Video Generation"`. | — |
 | `song_session_service.py` | Music session state | — |
 | `media_safety_service.py` | Media safety checks | — |
 | `expense_*.py` | Expense CRUD helpers (4 files) | — |
