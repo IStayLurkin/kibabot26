@@ -283,8 +283,10 @@ bot = ExpenseBot(command_prefix=BOT_PREFIX, intents=intents, help_command=None)
 
 @bot.event
 async def on_ready():
-    # Explicitly set status to bypass sidebar sync lag
-    await bot.change_presence(status=discord.Status.online)
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(type=discord.ActivityType.listening, name="!help"),
+    )
 
     if not bot.startup_banner_printed:
         bot.print_startup_banner()
@@ -293,6 +295,10 @@ async def on_ready():
         safe_task(_validate_services(bot), name="validate_services")
     else:
         logger.info("[gateway] reconnected user=%s", bot.user)
+        await bot.change_presence(
+            status=discord.Status.online,
+            activity=discord.Activity(type=discord.ActivityType.listening, name="!help"),
+        )
 
 
 async def _prewarm_ollama():
