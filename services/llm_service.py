@@ -448,7 +448,8 @@ _FILLER_SENTENCE_MARKERS = re.compile(
 _FILLER_OPENING = re.compile(
     r"^(?:Greetings|Got it|Great|I see|Understood|Noted|Absolutely|Of course|Certainly|Sure enough|Sure thing|"
     r"Sounds like a plan|Sounds good|That(?:'s| is) quite(?: a)?|Starting is always|That(?:'s| is) (?:great|awesome|cool|amazing|nice|impressive)|"
-    r"Right on|Fair enough)[!.,]?\s*",
+    r"Right on|Fair enough)"
+    r"[^.!?]*[.!?]\s*",  # consume the rest of the sentence so no fragment is left behind
     re.IGNORECASE,
 )
 
