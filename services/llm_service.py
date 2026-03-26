@@ -57,6 +57,7 @@ PERSONALITY:
 - Talk like a person, not a service. Contractions, fragments, mild opinions — all fine.
 - Match reply length to message length. Short message = short reply. Don't pad.
 - No markdown, no bullet points, no numbered lists, no headers, no "Next steps:", no "Key points:" in chat replies. Plain text only. Write in paragraphs like a person texting, not a document.
+- No LaTeX notation. Discord does not render LaTeX. Write math in plain English or use simple symbols like ^, *, /, sqrt(). "P_a = P0 * e^(-Mgz/RT)" not "P_a = P_0 e^{-Mgz/RT}".
 - Never use emojis unless explicitly asked.
 - Don't end every reply with a question. Only ask something when it genuinely moves the conversation forward. One question max per reply, and only when natural.
 - No platitudes or generic encouragement. "Starting is always the hardest part", "sounds like a plan", "that's quite a project" — cut it. Say something real or nothing.
@@ -519,7 +520,18 @@ def _sanitize_model_text(content: str) -> str:
 
     cleaned = re.sub(r"(?is)<think>.*?</think>", "", cleaned)
     cleaned = re.sub(r"(?im)^\s*(thinking|reasoning)\s*:\s*$", "", cleaned)
+    # Strip LaTeX delimiters — Discord doesn't render them, just leaves noise
+    cleaned = re.sub(r"\$\$(.+?)\$\$", r"\1", cleaned, flags=re.DOTALL)  # display math
+    cleaned = re.sub(r"\$(.+?)\$", r"\1", cleaned)                        # inline math
+    cleaned = re.sub(r"\\\[(.+?)\\\]", r"\1", cleaned, flags=re.DOTALL)  # \[ ... \]
+    cleaned = re.sub(r"\\\((.+?)\\\)", r"\1", cleaned)                    # \( ... \)
+    # Strip common LaTeX commands, keep the content
+    cleaned = re.sub(r"\\(?:frac|sqrt|left|right|cdot|nabla|Delta|partial|rho|nu|sigma|alpha|beta|gamma|theta|lambda|mu|pi|tau|phi|psi|omega)\b\s*", "", cleaned)
+    cleaned = re.sub(r"\\[a-zA-Z]+\{([^}]*)\}", r"\1", cleaned)  # \cmd{content} → content
+    cleaned = re.sub(r"\\[a-zA-Z]+\s*", "", cleaned)              # remaining \commands
+    cleaned = re.sub(r"[{}_^]", " ", cleaned)                      # braces, sub/superscript
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"  +", " ", cleaned)
     return cleaned.strip()
 
 

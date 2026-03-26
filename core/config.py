@@ -62,9 +62,9 @@ PREFERRED_LOCAL_IMAGE_BACKEND = os.getenv("PREFERRED_LOCAL_IMAGE_BACKEND", "auto
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").strip().lower()
 LLM_TEMPERATURE = _parse_float(os.getenv("LLM_TEMPERATURE", "0.8"), 0.8)
-LLM_MAX_TOKENS = _parse_int(os.getenv("LLM_MAX_TOKENS", "1500"), 1500)
+LLM_MAX_TOKENS = _parse_int(os.getenv("LLM_MAX_TOKENS", "2500"), 2500)
 AGENTIC_CHAT_ENABLED = os.getenv("AGENTIC_CHAT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
-AGENTIC_CHAT_MAX_TOKENS = _parse_int(os.getenv("AGENTIC_CHAT_MAX_TOKENS", "1500"), 1500)
+AGENTIC_CHAT_MAX_TOKENS = _parse_int(os.getenv("AGENTIC_CHAT_MAX_TOKENS", "2500"), 2500)
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
