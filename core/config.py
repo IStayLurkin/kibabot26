@@ -73,6 +73,14 @@ OLLAMA_CLI_PATH = os.getenv("OLLAMA_CLI_PATH", "").strip()
 OLLAMA_REQUEST_TIMEOUT_SECONDS = _parse_int(os.getenv("OLLAMA_REQUEST_TIMEOUT_SECONDS", "180"), 180)
 OLLAMA_NUM_CTX = _parse_int(os.getenv("OLLAMA_NUM_CTX", "8192"), 8192)
 
+# --- THINKING MODELS ---
+THINKING_FAST_MODEL = os.getenv("THINKING_FAST_MODEL", "deepseek-r1:7b").strip()
+THINKING_BEST_MODEL = os.getenv("THINKING_BEST_MODEL", "deepseek-r1:32b").strip()
+
+# --- CODING MODELS ---
+CODING_FAST_MODEL = os.getenv("CODING_FAST_MODEL", "qwen2.5-coder:7b").strip()
+CODING_BEST_MODEL = os.getenv("CODING_BEST_MODEL", "devstral:24b").strip()
+
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
