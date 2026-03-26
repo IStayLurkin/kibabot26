@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import re
+import time
 from core.config import (
-    OLLAMA_BASE_URL, OLLAMA_API_KEY, OLLAMA_NUM_CTX,
+    OLLAMA_BASE_URL, OLLAMA_API_KEY, OLLAMA_NUM_CTX, OLLAMA_REQUEST_TIMEOUT_SECONDS,
     THINKING_FAST_MODEL, THINKING_BEST_MODEL,
 )
 from core.logging_config import get_logger
@@ -19,7 +21,7 @@ THINKING_TIERS = {
 class ThinkingService:
     def __init__(self, performance_tracker=None):
         self.performance_tracker = performance_tracker
-        self._client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY)
+        self._client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY, timeout=OLLAMA_REQUEST_TIMEOUT_SECONDS)
 
     def _think_sync(self, prompt: str, tier: str) -> str:
         model = THINKING_TIERS.get(tier, THINKING_FAST_MODEL)
@@ -34,8 +36,15 @@ class ThinkingService:
 
     async def think(self, prompt: str, tier: str = "fast") -> str:
         """Run a thinking/reasoning model. Returns final answer with <think> blocks stripped."""
-        import re
-        raw = await asyncio.to_thread(self._think_sync, prompt, tier)
-        # Strip <think>...</think> blocks — already handled by _sanitize_model_text but do it here too
-        cleaned = re.sub(r"(?is)<think>.*?</think>", "", raw).strip()
-        return cleaned if cleaned else raw.strip()
+        started_at = time.perf_counter()
+        try:
+            raw = await asyncio.to_thread(self._think_sync, prompt, tier)
+            # Strip <think>...</think> blocks — already handled by _sanitize_model_text but do it here too
+            cleaned = re.sub(r"(?is)<think>.*?</think>", "", raw).strip()
+            return cleaned if cleaned else raw.strip()
+        finally:
+            if self.performance_tracker is not None:
+                self.performance_tracker.record_service_call(
+                    "thinking.think",
+                    (time.perf_counter() - started_at) * 1000,
+                )
