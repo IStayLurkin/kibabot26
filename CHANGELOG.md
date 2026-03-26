@@ -5,6 +5,20 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Fine-Tooth Comb Pass #2
+
+### Bug Fixes
+- **`classify_intent()` logic was inverted** — `agent_dispatcher.py` returned `"chat"` when `"real"` was in the prompt (e.g. "sing me a real song") and routed to media otherwise. The intent was the opposite: "real" means actually generate it. Fixed both the music and media branches.
+- **`workflow.ainvoke()` had no timeout** — if LangGraph stalled, the agentic chat path would hang indefinitely. Added `asyncio.wait_for(..., timeout=120.0)` with a logged error return.
+- **VRAM bar `ZeroDivisionError`** — `!status` dashboard computed `int((used_vram / total_vram) * bar_length)` without guarding `total_vram == 0`. Added `if total_vram > 0 else 0`.
+- **`GALLERY_CHANNEL_ID` int() unguarded** — a malformed env var would crash the entire image command path. Wrapped in `try/except (ValueError, TypeError)`.
+- **STT lazy-load race condition** — `WhisperModel.__init__` was called without a lock; two concurrent STT requests could initialize two model instances simultaneously. Added `asyncio.Lock()` around the check-and-init block.
+- **`HEAVY_EXECUTOR` import inside method** — `from core.executors import HEAVY_EXECUTOR` was inside `speech_to_text()` instead of at module level. Moved to top-level import.
+- **YuE venv python path never validated** — `subprocess.run()` was called with a hardcoded `.venv/Scripts/python.exe` path that was never checked for existence. Now validates `venv_python.exists()` and returns early with a clear log message.
+- **Discord file size never checked** — all five media commands (`!image`, `!tts`, `!video`, `!melody`, `!song`) sent files directly without checking size. Discord silently rejects uploads >25MB. Added `_check_file_size()` helper and applied it at all send sites.
+
+---
+
 ## [2026-03-25] — Static Trace Audit & Command Fixes
 
 ### Bug Fixes
