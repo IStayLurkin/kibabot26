@@ -90,6 +90,10 @@ VISION_ENABLED = os.getenv("VISION_ENABLED", "true").strip().lower() in {"1", "t
 FISH_SPEECH_BASE_URL = os.getenv("FISH_SPEECH_BASE_URL", "http://localhost:8080").strip()
 FISH_SPEECH_ENABLED = os.getenv("FISH_SPEECH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
+# --- PARAKEET STT ---
+PARAKEET_MODEL = os.getenv("PARAKEET_MODEL", "nvidia/parakeet-tdt-1.1b").strip()
+PARAKEET_ENABLED = os.getenv("PARAKEET_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
