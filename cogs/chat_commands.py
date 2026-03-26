@@ -233,7 +233,7 @@ class ChatCommands(commands.Cog):
         else:
             path = await self.image_service.generate_image(enhanced_prompt, progress_callback=update_bar)
 
-        if path:
+        if path and Path(path).exists():
             await status_msg.edit(content=f"✅ **{mode} Generation Complete!**")
 
             image_file = discord.File(path, filename=f"kiba_{mode.lower()}.png")

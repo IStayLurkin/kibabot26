@@ -50,11 +50,13 @@ class ImageService:
 
     def _load_flux(self):
         """Loads the heavy FLUX.2 engine."""
+        if Flux2Transformer2DModel is None or Flux2Pipeline is None or Mistral3ForConditionalGeneration is None:
+            raise RuntimeError("diffusers/transformers not installed — cannot load FLUX.2")
         if self.current_engine == "FLUX" and self.pipeline is not None:
             return
         self._purge_vram()
         logger.debug("Loading FLUX.2 (4-bit) to GPU...")
-        
+
         transformer = Flux2Transformer2DModel.from_pretrained(
             FLUX2_REPO, subfolder="transformer", torch_dtype=torch.bfloat16,
             device_map={"": 0}, low_cpu_mem_usage=True, local_files_only=True
@@ -71,6 +73,8 @@ class ImageService:
 
     def _load_sdxl(self):
         """Loads the high-speed SDXL engine."""
+        if StableDiffusionXLPipeline is None:
+            raise RuntimeError("diffusers not installed — cannot load SDXL")
         if self.current_engine == "SDXL" and self.pipeline is not None:
             return
         self._purge_vram()
@@ -139,8 +143,16 @@ class ImageService:
 
     def _update_activity(self):
         self._last_activity = time.time()
-        if self._unload_task: self._unload_task.cancel()
-        self._unload_task = asyncio.create_task(self._inactivity_monitor())
+        if self._unload_task:
+            self._unload_task.cancel()
+        task = asyncio.create_task(self._inactivity_monitor())
+        task.add_done_callback(self._on_monitor_done)
+        self._unload_task = task
+
+    @staticmethod
+    def _on_monitor_done(t: asyncio.Task):
+        if not t.cancelled() and t.exception() is not None:
+            logger.exception("[ImageService] Inactivity monitor raised", exc_info=t.exception())
 
     async def _inactivity_monitor(self):
         await asyncio.sleep(300)

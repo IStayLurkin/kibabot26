@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import time
@@ -11,6 +12,11 @@ from math import pi, sin
 from pathlib import Path
 from typing import Any
 from faster_whisper import WhisperModel  # pip install faster-whisper
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 from core.config import MEDIA_SAFETY_MODE
 from core.feature_flags import MEDIA_OUTPUT_DIR
@@ -53,7 +59,9 @@ class VoiceService:
         self._stt_last_used = time.time()
         if self._stt_unload_task:
             self._stt_unload_task.cancel()
-        self._stt_unload_task = asyncio.create_task(self._stt_inactivity_monitor())
+        task = asyncio.create_task(self._stt_inactivity_monitor())
+        task.add_done_callback(self._on_stt_monitor_done)
+        self._stt_unload_task = task
         self._record_duration("voice.speech_to_text", started_at)
         return result
 
@@ -85,6 +93,12 @@ class VoiceService:
                     pass
         except Exception as e:
             logger.warning("Local Piper TTS failed, falling back to original logic: %s", e)
+            if proc is not None:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
 
         # --- PRESERVED ORIGINAL PROVIDER LOOP ---
         try:
@@ -201,12 +215,16 @@ class VoiceService:
         """Unloads the Whisper model after idle for _STT_IDLE_SECONDS."""
         await asyncio.sleep(self._STT_IDLE_SECONDS)
         if self.stt_model is not None:
-            import torch, gc
             self.stt_model = None
             gc.collect()
-            if torch.cuda.is_available():
+            if torch is not None and torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.debug("[VoiceService] Whisper unloaded after %ss idle.", self._STT_IDLE_SECONDS)
+
+    @staticmethod
+    def _on_stt_monitor_done(t: asyncio.Task):
+        if not t.cancelled() and t.exception() is not None:
+            logger.exception("[VoiceService] STT inactivity monitor raised", exc_info=t.exception())
 
     def _record_duration(self, name: str, started_at: float) -> None:
         if self.performance_tracker is None:
