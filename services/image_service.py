@@ -29,7 +29,7 @@ class ImageService:
     def __init__(self, **kwargs):
         self.pipeline = None
         self.current_engine = None # Tracks 'FLUX' or 'SDXL'
-        self.output_dir = "outputs/images"
+        self.output_dir = "D:/ai storage/generated_media/images"
         self._last_activity = 0
         self._unload_task = None
         self._generation_lock = asyncio.Lock()

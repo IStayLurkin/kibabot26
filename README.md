@@ -15,6 +15,7 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **Clean Response Pipeline:** Strips hallucinated URLs, fake image descriptions, filler openers/closers, farewell phrases, and emojis from all LLM output.
 - **Sandboxed Code Execution:** `!code run` executes Python in an isolated workspace with dangerous-pattern detection.
 - **Hot Update:** `!update` pulls latest code from GitHub and restarts the bot automatically — no terminal needed.
+- **Live Startup Bar:** Terminal progress bar fills 0→100% during boot, logs print after fully ready.
 
 ## Tech Stack
 
@@ -28,7 +29,7 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **Frameworks:** discord.py 2.x, PyTorch (CUDA 12.8), Hugging Face Transformers
 - **Memory:** sqlite-vec + nomic-embed-text (vector RAG), aiosqlite (structured KV + history)
 - **Search:** SearXNG (self-hosted), Giphy API, VirusTotal API
-- **Storage:** G: Drive optimized (no C: drive bloat)
+- **Storage:** D: Drive (`D:\ai storage`) for all models and generated media — no G: or C: drive bloat
 
 ## Installation
 

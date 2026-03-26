@@ -344,6 +344,8 @@ async def _prewarm_ollama():
         logger.info("[prewarm] Ollama model loaded into VRAM and ready.")
     except Exception as exc:
         logger.warning("[prewarm] Ollama pre-warm failed (will load on first message): %s", exc)
+    finally:
+        startup_progress.advance("Ollama")
 
 
 async def _validate_services(b: "ExpenseBot") -> None:
@@ -376,6 +378,8 @@ async def _validate_services(b: "ExpenseBot") -> None:
                 logger.info("[startup] Embedding service OK (%d dims)", len(test_vec))
         except Exception as exc:
             logger.warning("[startup] Embedding service failed: %s", exc)
+        finally:
+            startup_progress.advance("Embeddings")
 
 
 @bot.event

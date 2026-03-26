@@ -22,8 +22,8 @@ except ImportError:
     WanPipeline = None
     imageio = None
 
-WAN_REPO = "Wan-AI/Wan2.1-T2V-14B"
-OUTPUT_DIR = Path("outputs/videos")
+WAN_REPO = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
+OUTPUT_DIR = Path("D:/ai storage/generated_media/videos")
 
 
 class WanService:
@@ -73,7 +73,7 @@ class WanService:
     def _load(self):
         if self.pipeline is not None:
             return
-        logger.info("[wan] Loading Wan2.1-T2V-14B...")
+        logger.info("[wan] Loading Wan2.1-T2V-14B-Diffusers (720p, 81 frames)...")
         self.pipeline = WanPipeline.from_pretrained(WAN_REPO, torch_dtype=torch.bfloat16)
         self.pipeline.enable_model_cpu_offload()
         logger.info("[wan] Wan2.1 loaded.")
@@ -95,9 +95,9 @@ class WanService:
         output = self.pipeline(
             prompt=prompt,
             num_inference_steps=steps,
-            num_frames=49,
-            height=480,
-            width=832,
+            num_frames=81,
+            height=720,
+            width=1280,
             callback_on_step_end=step_callback,
         )
         import numpy as np
