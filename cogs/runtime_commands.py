@@ -228,30 +228,47 @@ class RuntimeCommands(commands.Cog):
         await ctx.send(message)
 
 
-    @commands.group(name="personality", invoke_without_command=True, help="Switch or view Kiba's active personality.")
+    @commands.group(name="personality", invoke_without_command=True, help="Switch or view Kiba's personality for your conversations.")
     async def personality_group(self, ctx: commands.Context):
-        llm = getattr(self.bot, "llm_service", None)
-        current = getattr(llm, "active_personality", DEFAULT_PERSONALITY)
+        user_key = f"user_personality:{ctx.author.id}"
+        current = await get_bot_config(user_key, "")
+        if not current or current not in PERSONALITIES:
+            current = await get_bot_config("active_personality", DEFAULT_PERSONALITY)
         names = ", ".join(f"`{k}`" for k in PERSONALITIES)
-        await ctx.send(f"Active personality: `{current}`\nAvailable: {names}\n\nUse `!personality set <name>` to switch.")
+        await ctx.send(f"Your personality: `{current}`\nAvailable: {names}\n\nUse `!personality set <name>` to switch yours. Use `!personality global <name>` to change the default for everyone.")
 
     @personality_group.command(name="list", help="List available personalities.")
     async def personality_list(self, ctx: commands.Context):
         lines = [f"`{name}` — {prompt.strip().splitlines()[1].strip()}" for name, prompt in PERSONALITIES.items()]
         await ctx.send("\n".join(lines))
 
-    @personality_group.command(name="set", aliases=["switch"], help="Switch to a different personality.")
+    @personality_group.command(name="set", aliases=["switch"], help="Set your personal personality (only affects your conversations).")
     async def personality_set(self, ctx: commands.Context, *, name: str):
         name = name.lower().strip()
         if name not in PERSONALITIES:
             names = ", ".join(f"`{k}`" for k in PERSONALITIES)
             return await ctx.send(f"Unknown personality `{name}`. Available: {names}")
+        await set_bot_config(f"user_personality:{ctx.author.id}", name)
+        await ctx.send(f"Your personality set to `{name}`.")
+
+    @personality_group.command(name="reset", help="Reset your personality to the server default.")
+    async def personality_reset(self, ctx: commands.Context):
+        await set_bot_config(f"user_personality:{ctx.author.id}", "")
+        default = await get_bot_config("active_personality", DEFAULT_PERSONALITY)
+        await ctx.send(f"Reset to server default: `{default}`.")
+
+    @personality_group.command(name="global", help="Set the default personality for all users (owner only).")
+    @commands.is_owner()
+    async def personality_global(self, ctx: commands.Context, *, name: str):
+        name = name.lower().strip()
+        if name not in PERSONALITIES:
+            names = ", ".join(f"`{k}`" for k in PERSONALITIES)
+            return await ctx.send(f"Unknown personality `{name}`. Available: {names}")
         llm = getattr(self.bot, "llm_service", None)
-        if llm is None:
-            return await ctx.send("❌ LLM service not available.")
-        llm.active_personality = name
+        if llm is not None:
+            llm.active_personality = name
         await set_bot_config("active_personality", name)
-        await ctx.send(f"Switched to `{name}` personality.")
+        await ctx.send(f"Global default personality set to `{name}`.")
 
 
 async def setup(bot: commands.Bot) -> None:

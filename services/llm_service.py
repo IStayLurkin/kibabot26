@@ -416,7 +416,7 @@ class LLMService:
         self.temperature = LLM_TEMPERATURE
         self.max_tokens = LLM_MAX_TOKENS
         self.timezone_name = BOT_TIMEZONE
-        self.active_personality: str = DEFAULT_PERSONALITY
+        self.active_personality: str = DEFAULT_PERSONALITY  # global fallback only
         self.agentic_chat_enabled = AGENTIC_CHAT_ENABLED
         self.agentic_chat_max_tokens = AGENTIC_CHAT_MAX_TOKENS
         self.performance_tracker = performance_tracker
@@ -451,6 +451,7 @@ class LLMService:
             tool_context: str = "",
             search_results: list[dict] | None = None,
             relevant_memories: list[str] | None = None,
+            personality: str | None = None,
         ) -> List[Dict[str, str]]:
             memory_lines = "\n".join([f"- {k}: {v}" for k, v in memory.items()]) if memory else "- none"
             history_lines = []
@@ -484,7 +485,8 @@ class LLMService:
                     lines.append(f"- {m}")
                 preamble_parts.append("\n".join(lines))
 
-            active_prompt = PERSONALITIES.get(self.active_personality, SYSTEM_PROMPT)
+            resolved = personality or self.active_personality
+            active_prompt = PERSONALITIES.get(resolved, SYSTEM_PROMPT)
             system_content = active_prompt.strip() + "\n\n" + "\n".join(preamble_parts)
 
             messages = [{"role": "system", "content": system_content}]
@@ -717,6 +719,7 @@ class LLMService:
         behavior_rules: List[str] | None = None,
         search_results: list[dict] | None = None,
         relevant_memories: list[str] | None = None,
+        personality: str | None = None,
     ) -> str:
         messages = self._inject_behavior_rules(self._build_messages(
             user_display_name=user_display_name,
@@ -730,6 +733,7 @@ class LLMService:
             tool_context=tool_context,
             search_results=search_results,
             relevant_memories=relevant_memories,
+            personality=personality,
         ), behavior_rules)
 
         errors = []
@@ -786,6 +790,7 @@ class LLMService:
         tool_context: str = "",
         behavior_rules: List[str] | None = None,
         relevant_memories: list[str] | None = None,
+        personality: str | None = None,
     ) -> str:
         started_at = time.perf_counter()
         try:
@@ -812,6 +817,7 @@ class LLMService:
                 behavior_rules,
                 search_results,
                 relevant_memories,
+                personality,
             )
         finally:
             if self.performance_tracker is not None:
