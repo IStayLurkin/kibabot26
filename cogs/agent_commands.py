@@ -75,6 +75,8 @@ class AgentCommands(commands.Cog):
         async with ctx.typing():
             try:
                 result = await self.osint_service.lookup_query(query)
+                if len(result) > 1900:
+                    result = result[:1900] + "\n...[truncated]"
                 await ctx.send(result)
             except Exception as exc:
                 logger.exception("!osint failed")
@@ -90,7 +92,7 @@ class AgentCommands(commands.Cog):
         async with ctx.typing():
             try:
                 result = await self.osint_service.whois_lookup(domain)
-                await ctx.send(f"```text\n{result[:3900]}\n```")
+                await ctx.send(f"```text\n{result[:1900]}\n```")
             except Exception as exc:
                 logger.exception("!whois failed")
                 await ctx.send(f"Whois lookup failed: {exc}")
@@ -106,7 +108,8 @@ class AgentCommands(commands.Cog):
             try:
                 dns_result = await self.osint_service.dns_lookup(domain)
                 ssl_result = await self.osint_service.ssl_lookup(domain)
-                await ctx.send(f"```text\n{dns_result}\n\n{ssl_result}\n```")
+                combined = f"{dns_result}\n\n{ssl_result}"
+                await ctx.send(f"```text\n{combined[:1900]}\n```")
             except Exception as exc:
                 logger.exception("!domain failed")
                 await ctx.send(f"Domain lookup failed: {exc}")
