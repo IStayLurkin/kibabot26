@@ -266,14 +266,6 @@ async def generate_dynamic_reply(
         behavior_rules = []
         if behavior_rule_service is not None:
             behavior_rules = await behavior_rule_service.get_enabled_rule_texts()
-
-        from database.behavior_rules_repository import get_bot_config
-        from services.llm_service import PERSONALITIES, DEFAULT_PERSONALITY
-        _user_personality = await get_bot_config(f"user_personality:{user_id}", "")
-        _global_personality = await get_bot_config("active_personality", DEFAULT_PERSONALITY)
-        active_personality = _user_personality if _user_personality in PERSONALITIES else (
-            _global_personality if _global_personality in PERSONALITIES else DEFAULT_PERSONALITY
-        )
             lowered = user_text.strip().lower()
 
             if lowered in {"what are the rules", "show the rules", "list the rules", "what rules do you have"}:
@@ -310,6 +302,14 @@ async def generate_dynamic_reply(
                     goal="edit persistent behavior rule",
                     tool_name="behavior_rule",
                 )
+
+        from database.behavior_rules_repository import get_bot_config
+        from services.llm_service import PERSONALITIES, DEFAULT_PERSONALITY
+        _user_personality = await get_bot_config(f"user_personality:{user_id}", "")
+        _global_personality = await get_bot_config("active_personality", DEFAULT_PERSONALITY)
+        active_personality = _user_personality if _user_personality in PERSONALITIES else (
+            _global_personality if _global_personality in PERSONALITIES else DEFAULT_PERSONALITY
+        )
 
         if model_runtime_service is not None:
             runtime_answer = model_runtime_service.answer_natural_language_query(user_text)
