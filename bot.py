@@ -48,6 +48,8 @@ from services.animatediff_service import AnimateDiffService
 from services.wan_service import WanService
 from services.thinking_service import ThinkingService
 from services.vision_service import VisionService
+from services.fish_speech_service import FishSpeechService
+from services.parakeet_service import ParakeetService
 from tasks.task_manager import TaskManager
 
 
@@ -140,6 +142,8 @@ class ExpenseBot(commands.Bot):
         self.wan_service = None
         self.thinking_service = None
         self.vision_service = None
+        self.fish_speech_service = None
+        self.parakeet_service = None
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
@@ -213,6 +217,11 @@ class ExpenseBot(commands.Bot):
         self.wan_service = WanService(runtime_service=self.model_runtime_service)
         self.thinking_service = ThinkingService(performance_tracker=self.performance_tracker)
         self.vision_service = VisionService(performance_tracker=self.performance_tracker)
+        from core.config import FISH_SPEECH_ENABLED, PARAKEET_ENABLED
+        if FISH_SPEECH_ENABLED:
+            self.fish_speech_service = FishSpeechService(performance_tracker=self.performance_tracker)
+        if PARAKEET_ENABLED:
+            self.parakeet_service = ParakeetService(performance_tracker=self.performance_tracker)
         self.music_service = MusicService(
             performance_tracker=self.performance_tracker,
             runtime_service=self.model_runtime_service,

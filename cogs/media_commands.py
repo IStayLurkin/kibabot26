@@ -83,34 +83,76 @@ class MediaCommands(commands.Cog):
             except Exception as exc:
                 await ctx.send(f"Image generation failed: {exc}")
 
-    @commands.command(name="tts", aliases=["say"])
-    async def tts_command(self, ctx: commands.Context, *, text: str) -> None:
+    @commands.group(name="tts", aliases=["say"], invoke_without_command=True)
+    async def tts_group(self, ctx: commands.Context, *, text: str = "") -> None:
         if not VOICE_ENABLED:
             await ctx.send("Voice generation is disabled.")
             return
+        if not text:
+            await ctx.send("Usage: `!tts fast <text>` (Piper) or `!tts best <text>` (Fish Speech)\nOr just `!tts <text>` to use fast tier.")
+            return
+        await self._run_tts(ctx, text, "fast")
 
+    @tts_group.command(name="fast")
+    async def tts_fast(self, ctx: commands.Context, *, text: str) -> None:
+        await self._run_tts(ctx, text, "fast")
+
+    @tts_group.command(name="best")
+    async def tts_best(self, ctx: commands.Context, *, text: str) -> None:
+        await self._run_tts(ctx, text, "best")
+
+    async def _run_tts(self, ctx: commands.Context, text: str, tier: str) -> None:
+        if not VOICE_ENABLED:
+            await ctx.send("Voice generation is disabled.")
+            return
         text = text.strip()
         if not text:
-            await ctx.send("Provide text to speak. Example: `!tts hello from Kiba Bot`")
+            await ctx.send("Provide text to speak.")
             return
-
         if len(text) > MAX_TTS_LENGTH:
             await ctx.send(f"Text is too long. Keep it under {MAX_TTS_LENGTH} characters.")
             return
-
-        await ctx.send("On it, making that audio now...")
         async with ctx.typing():
             try:
-                audio_path = await self.voice_service.text_to_speech(text)
+                if tier == "best":
+                    fish = getattr(self.bot, "fish_speech_service", None)
+                    if fish is None:
+                        await ctx.send("Fish Speech is not enabled. Set `FISH_SPEECH_ENABLED=true` in .env.")
+                        return
+                    audio_path = await fish.synthesize(text)
+                else:
+                    audio_path = await self.voice_service.text_to_speech(text)
                 if audio_path and Path(audio_path).exists():
                     if not _check_file_size(audio_path):
                         await ctx.send("❌ TTS audio is too large to upload (>25MB).")
                     else:
                         await ctx.send(file=discord.File(audio_path, filename=Path(audio_path).name))
                 else:
-                    await ctx.send("❌ TTS failed. Check terminal.")
+                    await ctx.send("❌ TTS failed.")
             except Exception as exc:
                 await ctx.send(f"Text-to-speech failed: {exc}")
+
+    @commands.group(name="stt", invoke_without_command=True)
+    async def stt_group(self, ctx: commands.Context) -> None:
+        from database.behavior_rules_repository import get_bot_config
+        tier = await get_bot_config("stt_tier", "fast")
+        await ctx.send(f"Current STT tier: `{tier}` (fast=Whisper, best=Parakeet)\nUse `!stt fast` or `!stt best` to switch.")
+
+    @stt_group.command(name="fast")
+    async def stt_fast(self, ctx: commands.Context) -> None:
+        from database.behavior_rules_repository import set_bot_config
+        await set_bot_config("stt_tier", "fast")
+        await ctx.send("STT set to `fast` (Faster-Whisper).")
+
+    @stt_group.command(name="best")
+    async def stt_best(self, ctx: commands.Context) -> None:
+        from database.behavior_rules_repository import set_bot_config
+        parakeet = getattr(self.bot, "parakeet_service", None)
+        if parakeet is None:
+            await ctx.send("Parakeet is not enabled. Set `PARAKEET_ENABLED=true` in .env and restart.")
+            return
+        await set_bot_config("stt_tier", "best")
+        await ctx.send("STT set to `best` (Parakeet V3).")
 
     @commands.command(name="video", aliases=["animate"])
     async def video_command(self, ctx: commands.Context, *, prompt: str) -> None:

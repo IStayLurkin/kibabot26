@@ -291,7 +291,16 @@ class ChatCommands(commands.Cog):
                         temp_path = os.path.join(tempfile.gettempdir(), f"kiba_stt_{uuid.uuid4().hex}{ext}")
                         await attachment.save(temp_path)
                         try:
-                            transcription = await voice_svc.speech_to_text(temp_path)
+                            from database.behavior_rules_repository import get_bot_config
+                            stt_tier = await get_bot_config("stt_tier", "fast")
+                            if stt_tier == "best":
+                                parakeet = getattr(self.bot, "parakeet_service", None)
+                                if parakeet:
+                                    transcription = await parakeet.transcribe(temp_path)
+                                else:
+                                    transcription = await voice_svc.speech_to_text(temp_path)
+                            else:
+                                transcription = await voice_svc.speech_to_text(temp_path)
                             content = f"{content} [Transcribed Voice]: {transcription}"
                         finally:
                             if os.path.exists(temp_path):
