@@ -7,6 +7,22 @@ from services.llm_service import PERSONALITIES, DEFAULT_PERSONALITY
 _RUNTIME_UNAVAILABLE = "❌ Model runtime service is not available."
 
 
+async def _send_long(ctx: commands.Context, text: str, limit: int = 2000) -> None:
+    """Send text that may exceed Discord's 2000-char limit by splitting on newlines."""
+    if len(text) <= limit:
+        await ctx.send(text)
+        return
+    lines = text.splitlines(keepends=True)
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) > limit:
+            await ctx.send(chunk.rstrip())
+            chunk = ""
+        chunk += line
+    if chunk.strip():
+        await ctx.send(chunk.rstrip())
+
+
 class RuntimeCommands(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -187,14 +203,14 @@ class RuntimeCommands(commands.Cog):
 
     @commands.command(name="commands", aliases=["cmds"], help="List the commands currently available on the bot.")
     async def commands_list(self, ctx: commands.Context):
-        await ctx.send(await self.help_service.build_command_overview(self.bot, ctx))
+        await _send_long(ctx, await self.help_service.build_command_overview(self.bot, ctx))
 
     @commands.command(name="help", help="Show dynamic help for all commands or a specific command.")
     async def help_command(self, ctx: commands.Context, *, command_name: str | None = None):
         if command_name:
             await ctx.send(await self.help_service.build_command_help(self.bot, command_name, ctx))
             return
-        await ctx.send(await self.help_service.build_command_overview(self.bot, ctx))
+        await _send_long(ctx, await self.help_service.build_command_overview(self.bot, ctx))
 
     @commands.group(name="rule", invoke_without_command=True, help="Create, view, and manage strict persistent bot behavior rules.")
     async def rule_group(self, ctx: commands.Context):
@@ -269,6 +285,64 @@ class RuntimeCommands(commands.Cog):
             llm.active_personality = name
         await set_bot_config("active_personality", name)
         await ctx.send(f"Global default personality set to `{name}`.")
+
+    @commands.group(name="memory", invoke_without_command=True, help="Memory backend management.")
+    async def memory_group(self, ctx: commands.Context):
+        from database.behavior_rules_repository import get_bot_config
+        mode = await get_bot_config("memory_mode", "local")
+        mem0 = getattr(self.bot, "mem0_service", None)
+        mem0_status = "enabled" if mem0 is not None else "not enabled (set MEM0_ENABLED=true)"
+        await ctx.send(
+            f"Memory mode: `{mode}` (local=sqlite-vec, mem0=Mem0)\n"
+            f"Mem0: {mem0_status}\n"
+            f"Use `!memory mode local` or `!memory mode mem0` to switch."
+        )
+
+    @memory_group.command(name="mode", help="Switch memory backend (local or mem0).")
+    async def memory_mode(self, ctx: commands.Context, mode: str):
+        from database.behavior_rules_repository import set_bot_config
+        mode = mode.strip().lower()
+        if mode not in ("local", "mem0"):
+            await ctx.send("Valid modes: `local`, `mem0`")
+            return
+        if mode == "mem0" and getattr(self.bot, "mem0_service", None) is None:
+            await ctx.send("Mem0 is not enabled. Set `MEM0_ENABLED=true` in .env and restart.")
+            return
+        await set_bot_config("memory_mode", mode)
+        await ctx.send(f"Memory backend switched to `{mode}`.")
+
+    @memory_group.command(name="status", help="Show memory stats for both backends.")
+    async def memory_status(self, ctx: commands.Context):
+        from database.behavior_rules_repository import get_bot_config
+        from database.db_connection import get_db
+        mode = await get_bot_config("memory_mode", "local")
+        user_id = str(ctx.author.id)
+
+        lines = [f"Active backend: `{mode}`"]
+
+        # Local stats
+        try:
+            async with get_db() as db:
+                vec_service = getattr(self.bot, "vector_memory_service", None)
+                if vec_service:
+                    from database.vector_memory_db import get_all_vector_memories
+                    rows = await get_all_vector_memories(db, user_id=user_id)
+                    lines.append(f"Local (sqlite-vec): {len(rows)} memories stored for you")
+        except Exception as exc:
+            lines.append(f"Local: error — {exc}")
+
+        # Mem0 stats
+        mem0 = getattr(self.bot, "mem0_service", None)
+        if mem0:
+            try:
+                all_mems = await mem0.get_all(user_id)
+                lines.append(f"Mem0: {len(all_mems)} memories stored for you")
+            except Exception as exc:
+                lines.append(f"Mem0: error — {exc}")
+        else:
+            lines.append("Mem0: not enabled")
+
+        await ctx.send("\n".join(lines))
 
 
 async def setup(bot: commands.Bot) -> None:

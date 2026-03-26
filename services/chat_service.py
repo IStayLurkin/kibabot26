@@ -441,11 +441,16 @@ async def generate_dynamic_reply(
         # Semantic memory retrieval
         relevant_memories = []
         vector_memory_service = (services or {}).get("vector_memory_service")
+        mem0_service = (services or {}).get("mem0_service")
+        active_memory_service = vector_memory_service
         db_conn = None
         try:
-            if vector_memory_service is not None:
+            from database.behavior_rules_repository import get_bot_config
+            memory_mode = await get_bot_config("memory_mode", "local")
+            active_memory_service = mem0_service if (memory_mode == "mem0" and mem0_service is not None) else vector_memory_service
+            if active_memory_service is not None:
                 db_conn = await get_db()
-                relevant_memories = await vector_memory_service.retrieve(db_conn, user_id=user_id, query=user_text)
+                relevant_memories = await active_memory_service.retrieve(db_conn, user_id=user_id, query=user_text)
         except Exception as exc:
             logger.warning("[vector_memory] Retrieval failed in chat_service: %s", exc)
 
@@ -547,10 +552,10 @@ async def generate_dynamic_reply(
                     pending_question=pending_question,
                 )
 
-                if vector_memory_service is not None and db_conn is not None:
+                if active_memory_service is not None and db_conn is not None:
                     asyncio.create_task(maybe_store_episodic_memory(
                         llm=llm,
-                        vector_memory_service=vector_memory_service,
+                        vector_memory_service=active_memory_service,
                         db=db_conn,
                         user_id=user_id,
                         user_message=user_text,
@@ -593,11 +598,11 @@ async def generate_dynamic_reply(
                     last_tool=route_decision.tool_name,
                     pending_question="",
                 )
-                if vector_memory_service is not None and db_conn is not None:
+                if active_memory_service is not None and db_conn is not None:
                     asyncio.create_task(
                         maybe_store_episodic_memory(
                             llm=llm,
-                            vector_memory_service=vector_memory_service,
+                            vector_memory_service=active_memory_service,
                             db=db_conn,
                             user_id=user_id,
                             user_message=user_text,

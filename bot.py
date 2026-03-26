@@ -1,8 +1,8 @@
 # --- MUST BE AT THE ABSOLUTE TOP ---
 import os
 # Set HF_HOME before any huggingface imports to prevent fallback to C:/Users/.cache
-os.environ.setdefault("HF_HOME", "D:/ai storage/huggingface_cache")
-os.environ.setdefault("TORCH_HOME", "D:/ai storage/torch_cache")
+os.environ.setdefault("HF_HOME", "J:/aistorage/huggingface_cache")
+os.environ.setdefault("TORCH_HOME", "J:/aistorage/torch_cache")
 os.environ['OLLAMA_MODELS'] = 'G:/ollamamodels'
 # ----------------------------------
 
@@ -50,6 +50,7 @@ from services.thinking_service import ThinkingService
 from services.vision_service import VisionService
 from services.fish_speech_service import FishSpeechService
 from services.parakeet_service import ParakeetService
+from services.mem0_service import Mem0Service
 from tasks.task_manager import TaskManager
 
 
@@ -144,6 +145,7 @@ class ExpenseBot(commands.Bot):
         self.vision_service = None
         self.fish_speech_service = None
         self.parakeet_service = None
+        self.mem0_service = None
         self.start_time = time.perf_counter()
 
     async def on_message(self, message):
@@ -222,6 +224,12 @@ class ExpenseBot(commands.Bot):
             self.fish_speech_service = FishSpeechService(performance_tracker=self.performance_tracker)
         if PARAKEET_ENABLED:
             self.parakeet_service = ParakeetService(performance_tracker=self.performance_tracker)
+        from core.config import MEM0_ENABLED
+        if MEM0_ENABLED:
+            try:
+                self.mem0_service = Mem0Service()
+            except Exception as exc:
+                logger.warning("[startup] Mem0 failed to initialize: %s", exc)
         self.music_service = MusicService(
             performance_tracker=self.performance_tracker,
             runtime_service=self.model_runtime_service,

@@ -69,6 +69,7 @@ class ChatCommands(commands.Cog):
             "command_help_service": getattr(bot, "command_help_service", None),
             "behavior_rule_service": getattr(bot, "behavior_rule_service", None),
             "vector_memory_service": getattr(bot, "vector_memory_service", None),
+            "mem0_service": getattr(bot, "mem0_service", None),
             "search_service": getattr(bot, "search_service", None),
         }
 
