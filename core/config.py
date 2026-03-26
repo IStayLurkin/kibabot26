@@ -86,6 +86,10 @@ VISION_FAST_MODEL = os.getenv("VISION_FAST_MODEL", "moondream").strip()
 VISION_BEST_MODEL = os.getenv("VISION_BEST_MODEL", "llava:34b").strip()
 VISION_ENABLED = os.getenv("VISION_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
 
+# --- FISH SPEECH TTS ---
+FISH_SPEECH_BASE_URL = os.getenv("FISH_SPEECH_BASE_URL", "http://localhost:8080").strip()
+FISH_SPEECH_ENABLED = os.getenv("FISH_SPEECH_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
