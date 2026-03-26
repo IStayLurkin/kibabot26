@@ -17,7 +17,7 @@ COMMAND_ERROR_THRESHOLD_MS = 8000
 SERVICE_INFO_THRESHOLD_MS = 3000
 SERVICE_WARNING_THRESHOLD_MS = 10000
 SERVICE_ERROR_THRESHOLD_MS = 20000
-SUPPRESSED_SERVICE_PREFIXES = ("startup.", "llm.")
+SUPPRESSED_SERVICE_PREFIXES = ("startup.", "llm.", "animatediff", "cogvideo", "wan.", "image.", "video.", "voice.", "music.")
 TOP_LEVEL_LABELS = {
     "chat.generate_dynamic_reply": "Reply sent",
     "model_storage.pull.ollama": "Model pull finished",
