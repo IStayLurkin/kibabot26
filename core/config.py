@@ -71,6 +71,7 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "dolphin-llama3:latest")
 OLLAMA_CLI_PATH = os.getenv("OLLAMA_CLI_PATH", "").strip()
 OLLAMA_REQUEST_TIMEOUT_SECONDS = _parse_int(os.getenv("OLLAMA_REQUEST_TIMEOUT_SECONDS", "180"), 180)
+OLLAMA_NUM_CTX = _parse_int(os.getenv("OLLAMA_NUM_CTX", "8192"), 8192)
 
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")

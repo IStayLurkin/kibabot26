@@ -38,6 +38,7 @@ from core.config import (
     OLLAMA_API_KEY,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
     OLLAMA_REQUEST_TIMEOUT_SECONDS,
     SEARXNG_ENABLED,
     VOICE_PROVIDER,
@@ -878,12 +879,10 @@ class LLMService:
 
     def _create_chat_completion(self, provider: str, *, model: str, messages: List[dict], temperature: float, max_tokens: int):
         client = self._get_client_for_provider(provider)
-        return client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        kwargs = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens)
+        if provider == "ollama":
+            kwargs["extra_body"] = {"options": {"num_ctx": OLLAMA_NUM_CTX}}
+        return client.chat.completions.create(**kwargs)
 
     def _post_json(self, url: str, payload: dict, *, timeout: int = 60) -> dict:
         data = json.dumps(payload).encode("utf-8")
