@@ -1,13 +1,6 @@
 Set-Location $PSScriptRoot
 
-# 1. Ensure Ollama is running
-if (-not (Get-Process "ollama" -ErrorAction SilentlyContinue)) {
-    Write-Host "Starting Ollama server..."
-    Start-Process "ollama" -ArgumentList "serve" -WindowStyle Hidden
-    Start-Sleep -Seconds 5
-}
-
-# 2. Ensure Docker Desktop is running
+# 1. Docker Desktop
 $dockerReady = docker info 2>$null
 if (-not $dockerReady) {
     Write-Host "Starting Docker Desktop..."
