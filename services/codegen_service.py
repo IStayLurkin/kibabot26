@@ -1,9 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
-from core.config import MAX_CODE_REQUEST_LENGTH
+from openai import OpenAI
+
+from core.config import (
+    CODING_BEST_MODEL,
+    CODING_FAST_MODEL,
+    MAX_CODE_REQUEST_LENGTH,
+    OLLAMA_API_KEY,
+    OLLAMA_BASE_URL,
+    OLLAMA_NUM_CTX,
+)
+
+CODING_TIERS = {
+    "fast": CODING_FAST_MODEL,
+    "best": CODING_BEST_MODEL,
+}
 
 
 class CodegenService:
@@ -54,5 +69,42 @@ class CodegenService:
             if self.performance_tracker is not None:
                 self.performance_tracker.record_service_call(
                     "codegen.generate_code_help",
+                    (time.perf_counter() - started_at) * 1000,
+                )
+
+    async def ask(self, prompt: str, tier: str = "fast") -> str:
+        """Ask a coding-specific model. Uses tiered model selection bypassing the default LLM."""
+        started_at = time.perf_counter()
+        try:
+            cleaned = prompt.strip()
+            if not cleaned:
+                return "Tell me what code you want help with."
+            if len(cleaned) > MAX_CODE_REQUEST_LENGTH:
+                return f"Keep the code request under {MAX_CODE_REQUEST_LENGTH} characters."
+            model = CODING_TIERS.get(tier, CODING_FAST_MODEL)
+            client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY)
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a practical coding assistant. Give concise, correct code and brief explanations. Python 3.12 and CUDA 12.4 compatible only.",
+                },
+                {"role": "user", "content": cleaned},
+            ]
+
+            def _call():
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=2000,
+                    extra_body={"options": {"num_ctx": OLLAMA_NUM_CTX}},
+                )
+                return resp.choices[0].message.content or ""
+
+            return await asyncio.to_thread(_call)
+        finally:
+            if self.performance_tracker is not None:
+                self.performance_tracker.record_service_call(
+                    f"codegen.ask.{tier}",
                     (time.perf_counter() - started_at) * 1000,
                 )

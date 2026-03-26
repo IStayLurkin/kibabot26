@@ -29,7 +29,7 @@ class CodeCommands(commands.Cog):
         if not await self.ensure_authorized(ctx):
             return
         await ctx.send(
-            "Use `!code create`, `!code edit`, `!code read`, `!code run`, `!code list`, `!code delete`, or `!code output`."
+            "Use `!code create`, `!code edit`, `!code read`, `!code run`, `!code list`, `!code delete`, `!code output`, or `!code ask`."
         )
 
     @code_group.command(name="create", help="Create a file inside the sandbox workspace.")
@@ -149,6 +149,38 @@ class CodeCommands(commands.Cog):
             f"Stdout:\n```text\n{stdout_text}\n```\n"
             f"Stderr:\n```text\n{stderr_text}\n```"
         )
+
+
+    @code_group.group(name="ask", invoke_without_command=True, help="Ask a coding model a question.")
+    async def code_ask_group(self, ctx: commands.Context, *, prompt: str = ""):
+        if not prompt:
+            await ctx.send("Usage: `!code ask fast <prompt>` or `!code ask best <prompt>`")
+            return
+        await self._run_code_ask(ctx, prompt, "fast")
+
+    @code_ask_group.command(name="fast", help="Ask the fast coding model.")
+    async def code_ask_fast(self, ctx: commands.Context, *, prompt: str):
+        await self._run_code_ask(ctx, prompt, "fast")
+
+    @code_ask_group.command(name="best", help="Ask the best coding model.")
+    async def code_ask_best(self, ctx: commands.Context, *, prompt: str):
+        await self._run_code_ask(ctx, prompt, "best")
+
+    async def _run_code_ask(self, ctx: commands.Context, prompt: str, tier: str):
+        codegen = getattr(self.bot, "codegen_service", None)
+        if codegen is None:
+            await ctx.send("Codegen service is not available.")
+            return
+        async with ctx.typing():
+            try:
+                result = await codegen.ask(prompt, tier=tier)
+                if len(result) <= 1900:
+                    await ctx.send(result)
+                else:
+                    for i in range(0, len(result), 1900):
+                        await ctx.send(result[i : i + 1900])
+            except Exception as exc:
+                await ctx.send(f"Code ask error: {exc}")
 
 
 async def setup(bot: commands.Bot) -> None:
