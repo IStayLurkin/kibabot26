@@ -15,7 +15,6 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **Clean Response Pipeline:** Strips hallucinated URLs, fake image descriptions, filler openers/closers, farewell phrases, and emojis from all LLM output.
 - **Sandboxed Code Execution:** `!code run` executes Python in an isolated workspace with dangerous-pattern detection.
 - **Hot Update:** `!update` pulls latest code from GitHub and restarts the bot automatically — no terminal needed.
-- **Ollama Auto-Launch:** Bot starts `ollama serve` automatically on startup if it isn't already running.
 
 ## Tech Stack
 
@@ -77,8 +76,9 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    | `VIRUSTOTAL_API_KEY` | VirusTotal API key for URL scanning |
    | `LOCAL_IMAGE_DIR` | Optional local folder of trusted images/GIFs |
    | `SEARXNG_ENABLED` | `true`/`false` — enable web search (default: `false`) |
-   | `SEARXNG_BASE_URL` | SearXNG instance URL (default: `http://localhost:8080`) |
+   | `SEARXNG_BASE_URL` | SearXNG instance URL (default: `http://localhost:8888`) |
    | `SEARXNG_MAX_RESULTS` | Max results per search query (default: `5`) |
+   | `OLLAMA_NUM_CTX` | Ollama context window in tokens (default: `8192`) |
 
 5. **Set up SearXNG (web search RAG):**
 
