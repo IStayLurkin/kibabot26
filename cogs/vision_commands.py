@@ -6,7 +6,6 @@ from discord.ext import commands
 
 from core.config import VISION_FAST_MODEL, VISION_BEST_MODEL
 from core.logging_config import get_logger
-from services.vision_service import VISION_TIERS
 
 logger = get_logger(__name__)
 
