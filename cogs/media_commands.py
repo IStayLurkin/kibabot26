@@ -85,9 +85,6 @@ class MediaCommands(commands.Cog):
 
     @commands.group(name="tts", aliases=["say"], invoke_without_command=True)
     async def tts_group(self, ctx: commands.Context, *, text: str = "") -> None:
-        if not VOICE_ENABLED:
-            await ctx.send("Voice generation is disabled.")
-            return
         if not text:
             await ctx.send("Usage: `!tts fast <text>` (Piper) or `!tts best <text>` (Fish Speech)\nOr just `!tts <text>` to use fast tier.")
             return

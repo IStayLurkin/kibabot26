@@ -9,11 +9,13 @@ from core.logging_config import get_logger
 logger = get_logger(__name__)
 
 _nemo_model = None
-_nemo_lock = asyncio.Lock()
+_nemo_lock: asyncio.Lock | None = None
 
 
 async def _get_nemo_model():
-    global _nemo_model
+    global _nemo_model, _nemo_lock
+    if _nemo_lock is None:
+        _nemo_lock = asyncio.Lock()
     async with _nemo_lock:
         if _nemo_model is None:
             import nemo.collections.asr as nemo_asr
