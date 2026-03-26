@@ -521,10 +521,13 @@ def _sanitize_model_text(content: str) -> str:
     cleaned = re.sub(r"(?is)<think>.*?</think>", "", cleaned)
     cleaned = re.sub(r"(?im)^\s*(thinking|reasoning)\s*:\s*$", "", cleaned)
     # Strip LaTeX delimiters — Discord doesn't render them, just leaves noise
-    cleaned = re.sub(r"\$\$(.+?)\$\$", r"\1", cleaned, flags=re.DOTALL)  # display math
-    cleaned = re.sub(r"\$(.+?)\$", r"\1", cleaned)                        # inline math
-    cleaned = re.sub(r"\\\[(.+?)\\\]", r"\1", cleaned, flags=re.DOTALL)  # \[ ... \]
-    cleaned = re.sub(r"\\\((.+?)\\\)", r"\1", cleaned)                    # \( ... \)
+    cleaned = re.sub(r"\$\$(.+?)\$\$", r"\1", cleaned, flags=re.DOTALL)  # $$...$$
+    cleaned = re.sub(r"\$(.+?)\$", r"\1", cleaned)                        # $...$
+    # \[...\] and \\[...\\] — match the backslash(es) + bracket as a unit
+    cleaned = re.sub(r"\\+\[(.+?)\\+\]", r"\1", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"\\+\((.+?)\\+\)", r"\1", cleaned)
+    # Strip any remaining lone backslashes left over
+    cleaned = re.sub(r"\\(?=[^a-zA-Z])", "", cleaned)
     # Strip common LaTeX commands, keep the content
     cleaned = re.sub(r"\\(?:frac|sqrt|left|right|cdot|nabla|Delta|partial|rho|nu|sigma|alpha|beta|gamma|theta|lambda|mu|pi|tau|phi|psi|omega)\b\s*", "", cleaned)
     cleaned = re.sub(r"\\[a-zA-Z]+\{([^}]*)\}", r"\1", cleaned)  # \cmd{content} → content
