@@ -8,6 +8,7 @@ os.environ['OLLAMA_MODELS'] = 'G:/ollamamodels'
 # ----------------------------------
 
 import asyncio
+import re
 import sys
 
 import time
@@ -72,9 +73,24 @@ intents.presences = True   # Required to show as "Online" (Green Circle)
 async def send_long_message(destination, text):
     if not text:
         return
-    # Splits by 1900 to stay under 2000 limit
-    for i in range(0, len(text), 1900):
-        await destination.send(text[i:i+1900])
+    limit = 1900
+    if len(text) <= limit:
+        await destination.send(text)
+        return
+    # Split on sentence boundaries to avoid cutting mid-sentence
+    chunks = []
+    current = ""
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if len(current) + len(sentence) + 1 > limit:
+            if current:
+                chunks.append(current.strip())
+            current = sentence
+        else:
+            current = (current + " " + sentence).strip() if current else sentence
+    if current:
+        chunks.append(current.strip())
+    for chunk in chunks:
+        await destination.send(chunk)
 
 
 def safe_task(coro, *, name: str = ""):
