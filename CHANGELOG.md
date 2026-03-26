@@ -5,6 +5,24 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-26] — Storage Migration & Startup UX
+
+### New Features
+- **Live startup progress bar** — terminal shows a single `[████░░░░] 50% Kiba Bot loading...` bar that fills 0→100% during boot. All log output is buffered and printed only after the bar hits 100%, keeping the terminal clean. Bar clears line artifacts with `\033[K`.
+- **`download_models.py`** — one-shot script to download all bot models (FLUX.2, SDXL, Realistic Vision, AnimateDiff, CogVideoX-2b, Wan2.1, Whisper) directly to `D:\ai storage\huggingface_cache`. Authenticates via `HF_TOKEN` env var.
+
+### Improvements
+- **Storage migrated to D drive** — all AI model caches and generated media moved from G/C drive to `D:\ai storage`. `HF_HOME`, `TORCH_HOME`, `PIP_CACHE_DIR`, `MEDIA_OUTPUT_DIR`, `MODEL_STORAGE_ROOT`, `CODE_WORKSPACE_ROOT` all updated in `.env`, `bot.py`, and `core/config.py`.
+- **`bot.py` sets `HF_HOME` at absolute top** — before any imports, preventing HuggingFace from falling back to `C:\Users\.cache` on lazy model loads.
+- **Video/image service output paths fixed** — `animatediff_service`, `cogvideo_service`, `wan_service`, `image_service` were using relative `outputs/` paths that resolved to G drive. Now hardcoded to `D:\ai storage\generated_media\...`.
+- **Suppress HF deprecation warning** — `local_dir_use_symlinks` UserWarning from `huggingface_hub` filtered in `setup_logging()`.
+- **System prompt: context awareness rules added** — three new FORBIDDEN entries in `SYSTEM_PROMPT`:
+  - No sleep/goodnight assumptions — "about to sleep soon" ≠ leaving; don't dismiss the user.
+  - No ignoring corrections — must acknowledge and adjust when user pushes back.
+  - No fabricated context — never reference topics not actually mentioned in the conversation.
+
+---
+
 ## [2026-03-25] — Personality System & Chat Fixes
 
 ### New Features
