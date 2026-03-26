@@ -143,13 +143,23 @@ class AgentDispatcher:
             try:
                 prompt = state["messages"][-1]
 
-                if any(word in prompt.lower() for word in ["sing", "lyrics", "song", "vocal"]):
+                lower = prompt.lower()
+                if any(word in lower for word in ["sing", "lyrics", "song", "vocal"]):
+                    # Extract BPM if user mentioned one (e.g. "120 bpm", "at 90bpm")
+                    bpm_match = re.search(r'\b(\d{2,3})\s*bpm\b', lower)
+                    bpm = int(bpm_match.group(1)) if bpm_match else self.music_gen.bpm
+
+                    # Extract vibe: everything before a period separator, or the full prompt
+                    parts = prompt.split(".", 1)
+                    vibe = parts[0].strip() if parts[0].strip() else "cinematic"
+                    lyrics = parts[1].strip() if len(parts) > 1 else prompt
+
                     audio_path = await self.music_gen.generate_song_clip(
-                        vibe="cinematic",
-                        bpm=120,
-                        voice_style="studio",
-                        vocal_mode="lyrics",
-                        lyrics=prompt,
+                        vibe=vibe,
+                        bpm=bpm,
+                        voice_style=self.music_gen.voice_style,
+                        vocal_mode=self.music_gen.vocal_mode,
+                        lyrics=lyrics,
                     )
                 else:
                     audio_path = await self.music_gen.generate_melody(prompt)

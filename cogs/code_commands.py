@@ -36,6 +36,9 @@ class CodeCommands(commands.Cog):
     async def code_create(self, ctx: commands.Context, filename: str, *, content: str):
         if not await self.ensure_authorized(ctx):
             return
+        if "/" in filename or "\\" in filename:
+            await ctx.send("Filename must not contain path separators. Use a plain filename like `script.py`.")
+            return
         try:
             relative_path = self.code_service.create_file(filename, content)
             await ctx.send(f"Created `{relative_path}` in the sandbox workspace.")
