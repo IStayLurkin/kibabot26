@@ -16,10 +16,10 @@ if CUDA_PREFERRED:
     os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
 
 # --- DRIVE REDIRECTION ---
-os.environ["HF_HOME"] = os.getenv("HF_HOME", "D:/ai storage/huggingface_cache")
-os.environ["TORCH_HOME"] = os.getenv("TORCH_HOME", "D:/ai storage/torch_cache")
+os.environ["HF_HOME"] = os.getenv("HF_HOME", "J:/aistorage/huggingface_cache")
+os.environ["TORCH_HOME"] = os.getenv("TORCH_HOME", "J:/aistorage/torch_cache")
 os.environ["OLLAMA_MODELS"] = os.getenv("OLLAMA_MODELS", "G:/ollamamodels")
-os.environ["PIP_CACHE_DIR"] = os.getenv("PIP_CACHE_DIR", "D:/ai storage/pip_cache")
+os.environ["PIP_CACHE_DIR"] = os.getenv("PIP_CACHE_DIR", "J:/aistorage/pip_cache")
 
 def _parse_int_list(value: str) -> list[int]:
     values = []
@@ -94,6 +94,10 @@ FISH_SPEECH_ENABLED = os.getenv("FISH_SPEECH_ENABLED", "false").strip().lower() 
 PARAKEET_MODEL = os.getenv("PARAKEET_MODEL", "nvidia/parakeet-tdt-1.1b").strip()
 PARAKEET_ENABLED = os.getenv("PARAKEET_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
+# --- MEM0 MEMORY ---
+MEM0_API_KEY = os.getenv("MEM0_API_KEY", "").strip()  # Leave empty for local mode
+MEM0_ENABLED = os.getenv("MEM0_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
 HF_BASE_URL = os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1")
 HF_TOKEN = os.getenv("HF_TOKEN")
 HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
@@ -107,8 +111,8 @@ OSINT_ENABLED = os.getenv("OSINT_ENABLED", "true").strip().lower() in {"1", "tru
 
 SAFE_OSINT_ONLY = os.getenv("SAFE_OSINT_ONLY", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "D:/ai storage/generated_media")
-MODEL_STORAGE_ROOT = os.getenv("MODEL_STORAGE_ROOT", "D:/ai storage/huggingface_cache")
+MEDIA_OUTPUT_DIR = os.getenv("MEDIA_OUTPUT_DIR", "J:/aistorage/generated_media")
+MODEL_STORAGE_ROOT = os.getenv("MODEL_STORAGE_ROOT", "J:/aistorage/huggingface_cache")
 MODEL_PULL_TIMEOUT_SECONDS = _parse_int(os.getenv("MODEL_PULL_TIMEOUT_SECONDS", "1800"), 1800)
 ENABLED_MODEL_PROVIDERS = _parse_str_list(os.getenv("ENABLED_MODEL_PROVIDERS", "ollama,local,hf,automatic1111,comfyui"))
 DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", LLM_PROVIDER).strip().lower()
@@ -122,7 +126,7 @@ if DEFAULT_MODEL_PROVIDER not in ENABLED_MODEL_PROVIDERS:
     )
     DEFAULT_MODEL_PROVIDER = ENABLED_MODEL_PROVIDERS[0] if ENABLED_MODEL_PROVIDERS else DEFAULT_MODEL_PROVIDER
 
-CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "D:/ai storage/code_workspace")
+CODE_WORKSPACE_ROOT = os.getenv("CODE_WORKSPACE_ROOT", "J:/aistorage/code_workspace")
 CODE_SANDBOX_MODE = os.getenv("CODE_SANDBOX_MODE", "subprocess").strip().lower()
 CODE_EXECUTION_TIMEOUT_SECONDS = _parse_int(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "20"), 20)
 CODE_MAX_OUTPUT_CHARS = _parse_int(os.getenv("CODE_MAX_OUTPUT_CHARS", "6000"), 6000)
