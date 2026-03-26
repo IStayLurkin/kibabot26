@@ -6,8 +6,11 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 
 - **Unrestricted Local Intelligence:** Powered by a custom Ollama `kiba` model (Dolphin 3.0 base — `dolphin3:8b-llama3.1-q8_0`). No content filtering.
 - **Multi-Modal Generation:** FLUX.2 (4-bit) and SDXL (FP16) image generation; StableAudio instrumental; YuE full vocal tracks; CogVideoX-2b/5b, AnimateDiff, and Wan2.1 video generation.
-- **Text-to-Speech / Speech-to-Text:** Piper TTS (local ONNX model) + Faster-Whisper STT. Upload a voice clip and Kiba transcribes and replies.
-- **Persistent Memory:** Long-term and short-term memory stored locally — structured KV facts plus semantic/episodic vector memory (sqlite-vec + nomic-embed-text). Top-5 relevant past memories injected into every reply.
+- **Text-to-Speech / Speech-to-Text:** Tiered audio — `fast` uses Piper TTS + Faster-Whisper STT; `best` uses Fish Speech V1.5 (zero-shot voice cloning) + NVIDIA Parakeet V3 (sub-50ms STT).
+- **Vision (Multimodal):** Attach an image to any message — bot auto-analyzes it with a vision model. `!vision fast` uses Moondream (2B, instant); `!vision best` uses LLaVA-34B (SOTA detail).
+- **Thinking Models:** `!think fast` uses DeepSeek-R1:7B for quick chain-of-thought; `!think best` uses DeepSeek-R1:32B for deep reasoning.
+- **Tiered Coding Assistant:** `!code ask fast` (Qwen2.5-Coder:7B) or `!code ask best` (Devstral-24B) for coding questions separate from the sandbox.
+- **Persistent Memory:** Long-term and short-term memory stored locally — structured KV facts plus semantic/episodic vector memory (sqlite-vec + nomic-embed-text). Swappable Mem0 backend for comparison via `!memory mode mem0/local`.
 - **Web Search (RAG):** Automatically searches the web via a local SearXNG instance when a message needs live information. Fast keyword pre-filter skips the classifier for casual chat; results injected as a grounded context block.
 - **Agentic Routing:** LangGraph-based agent dispatcher routes natural language to image, music, video, code, or OSINT tools automatically.
 - **Hardware Optimized:** Specifically tuned for **24GB VRAM** environments and **CUDA 12.8**. Automatic VRAM management — models unload after idle, VRAMGuard fires at 16GB used.
@@ -24,7 +27,10 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
 - **Image:** FLUX.2-dev (4-bit BnB), Stable Diffusion XL (FP16) via `diffusers`
 - **Music:** StableAudio (instrumental), YuE via subprocess (full vocal tracks)
 - **Video:** CogVideoX-2b/5b, AnimateDiff, Wan2.1
-- **Voice:** Piper TTS (ONNX), Faster-Whisper STT (CUDA)
+- **Voice:** Piper TTS (fast) / Fish Speech V1.5 (best), Faster-Whisper STT (fast) / NVIDIA Parakeet V3 (best)
+- **Vision:** Moondream 2B (fast) / LLaVA-34B (best) via Ollama multimodal API
+- **Thinking:** DeepSeek-R1:7B (fast) / DeepSeek-R1:32B (best) with chain-of-thought stripping
+- **Coding:** Qwen2.5-Coder:7B (fast) / Devstral-24B (best) for `!code ask`
 - **Agentic:** LangGraph `StateGraph` with async nodes
 - **Frameworks:** discord.py 2.x, PyTorch (CUDA 12.8), Hugging Face Transformers
 - **Memory:** sqlite-vec + nomic-embed-text (vector RAG), aiosqlite (structured KV + history)
@@ -80,6 +86,17 @@ Kiba is a high-performance, agentic Discord bot designed for **fully local execu
    | `SEARXNG_BASE_URL` | SearXNG instance URL (default: `http://localhost:8888`) |
    | `SEARXNG_MAX_RESULTS` | Max results per search query (default: `5`) |
    | `OLLAMA_NUM_CTX` | Ollama context window in tokens (default: `8192`) |
+   | `THINKING_FAST_MODEL` | Fast thinking model (default: `deepseek-r1:7b`) |
+   | `THINKING_BEST_MODEL` | Best thinking model (default: `deepseek-r1:32b`) |
+   | `CODING_FAST_MODEL` | Fast coding model (default: `qwen2.5-coder:7b`) |
+   | `CODING_BEST_MODEL` | Best coding model (default: `devstral:24b`) |
+   | `VISION_FAST_MODEL` | Fast vision model (default: `moondream`) |
+   | `VISION_BEST_MODEL` | Best vision model (default: `llava:34b`) |
+   | `FISH_SPEECH_ENABLED` | Enable Fish Speech TTS (default: `false`) |
+   | `FISH_SPEECH_BASE_URL` | Fish Speech server URL (default: `http://localhost:8080`) |
+   | `PARAKEET_ENABLED` | Enable Parakeet STT (default: `false`) |
+   | `MEM0_ENABLED` | Enable Mem0 memory backend (default: `false`) |
+   | `MEM0_API_KEY` | Mem0 API key (leave empty for local mode) |
 
 5. **Set up SearXNG (web search RAG):**
 
@@ -130,11 +147,29 @@ Use `!help` or `!commands` in Discord to see the full live list at any time.
 | `!draw <prompt>` / `!image` | Everyone | FLUX.2 (4-bit) image — prompt auto-enhanced via Ollama |
 | `!fast <prompt>` | Everyone | SDXL (FP16) image — faster, stylized |
 
+### Vision
+
+| Command | Access | Description |
+|---|---|---|
+| *(attach image to any message)* | Everyone | Auto-analyzed by fast vision model, context injected into reply |
+| `!vision fast [prompt]` | Everyone | Analyze image with Moondream (fast, 2B) |
+| `!vision best [prompt]` | Everyone | Analyze image with LLaVA-34B (best quality) |
+
+### Thinking / Reasoning
+
+| Command | Access | Description |
+|---|---|---|
+| `!think fast <prompt>` | Everyone | DeepSeek-R1:7B — quick chain-of-thought |
+| `!think best <prompt>` | Everyone | DeepSeek-R1:32B — deep reasoning |
+
 ### Audio Generation
 
 | Command | Access | Description |
 |---|---|---|
-| `!tts <text>` / `!say` | Everyone | Text-to-speech via local Piper |
+| `!tts fast <text>` / `!say` | Everyone | Text-to-speech via Piper (fast, local) |
+| `!tts best <text>` | Everyone | Text-to-speech via Fish Speech V1.5 (expressive, requires `FISH_SPEECH_ENABLED=true`) |
+| `!stt fast` | Everyone | Switch voice transcription to Faster-Whisper |
+| `!stt best` | Everyone | Switch voice transcription to Parakeet V3 (requires `PARAKEET_ENABLED=true`) |
 | `!melody <prompt>` / `!music` / `!tune` | Everyone | Instrumental audio via StableAudio |
 | `!song <vibe>. <lyrics>` / `!sing` | Everyone | Full vocal track via YuE (~6 min on 3090 Ti) |
 | `!studio bpm/voice/mode <val>` | Owner only | Update music generation defaults |
@@ -149,10 +184,12 @@ Use `!help` or `!commands` in Discord to see the full live list at any time.
 | `!animatediff <prompt>` | Everyone | AnimateDiff |
 | `!wan <prompt>` | Everyone | Wan2.1 |
 
-### Code Sandbox
+### Code
 
 | Command | Access | Description |
 |---|---|---|
+| `!code ask fast <prompt>` | Everyone | Ask Qwen2.5-Coder:7B a coding question |
+| `!code ask best <prompt>` | Everyone | Ask Devstral-24B a coding question |
 | `!code create <file> <content>` | Allowed users | Create a file in the sandbox |
 | `!code edit <file> <content>` | Allowed users | Overwrite a file |
 | `!code read <file>` | Allowed users | Read a file |
@@ -202,6 +239,15 @@ Available personalities: `kiba` (default), `analyst`, `roast`, `tutor`, `hype`, 
 | `!whois <domain>` | Owner/Admin | WHOIS lookup |
 | `!domain <domain>` | Owner/Admin | DNS + SSL certificate info |
 | `!agent on/off/status` | Owner/Admin | Toggle agentic mode per channel |
+
+### Memory
+
+| Command | Access | Description |
+|---|---|---|
+| `!memory` | Everyone | Show active memory backend and status |
+| `!memory mode local` | Everyone | Use sqlite-vec memory backend |
+| `!memory mode mem0` | Everyone | Use Mem0 backend (requires `MEM0_ENABLED=true`) |
+| `!memory status` | Everyone | Show memory counts from both backends |
 
 ### Admin / Dev
 
