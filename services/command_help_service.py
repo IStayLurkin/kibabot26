@@ -8,7 +8,8 @@ from core.constants import BOT_DEFAULT_PREFIX
 
 SECTION_LABELS = {
     "RuntimeCommands": "Model Controls",
-    "MediaCommands": "Image Controls",
+    "MediaCommands": "Media",
+    "VideoCommands": "Video Generation",
     "CodeCommands": "Code Sandbox",
     "AgentCommands": "System",
     "ChatCommands": "General",
@@ -56,10 +57,13 @@ class CommandHelpService:
 
         for command in sorted(bot.commands, key=lambda item: item.name):
             if isinstance(command, commands.Group):
+                if await self._can_show_command(command, ctx):
+                    line = self._format_command_line(command, prefix) + " ..."
+                    grouped[self._section_name(command)].append(line)
                 for subcommand in sorted(command.commands, key=lambda item: item.name):
                     if not await self._can_show_command(subcommand, ctx):
                         continue
-                    grouped[self._section_name(subcommand)].append(self._format_command_line(subcommand, prefix))
+                    grouped[self._section_name(subcommand)].append("  " + self._format_command_line(subcommand, prefix))
                 continue
 
             if not await self._can_show_command(command, ctx):
@@ -89,6 +93,8 @@ class CommandHelpService:
 
         for command in sorted(bot.commands, key=lambda item: item.name):
             if isinstance(command, commands.Group):
+                if await self._can_show_command(command, ctx):
+                    grouped[self._section_name(command)].append(command.qualified_name)
                 for subcommand in sorted(command.commands, key=lambda item: item.name):
                     if not await self._can_show_command(subcommand, ctx):
                         continue
