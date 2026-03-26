@@ -5,6 +5,15 @@ Format: `[date] type: description` — grouped by release session.
 
 ---
 
+## [2026-03-25] — Static Trace Audit & Command Fixes
+
+### Bug Fixes
+- **OSINT commands exceeded Discord 2000 char limit** — `!whois` truncated at 3900 chars then wrapped in a code block, pushing the total well past Discord's limit and causing a guaranteed send failure. `!domain` concatenated DNS + SSL output with no length check at all. `!osint` sent raw results with no truncation. All three now cap content at 1900 chars before wrapping.
+- **Music agent node ignored user's prompt** — `music_agent_node` in `agent_dispatcher.py` hardcoded `vibe="cinematic"`, `bpm=120`, `voice_style="studio"` for every request regardless of what the user asked. Now extracts BPM from the prompt if specified (e.g. "120 bpm"), splits on `.` to separate vibe from lyrics (matching `!song` convention), and falls back to the music service's live configured defaults instead of arbitrary constants.
+- **`!code create` gave cryptic error on path separators** — filenames containing `/` or `\` would reach the service's internal path traversal guard and surface a bare `ValueError`. Added an explicit upfront check with a clear user-facing message.
+
+---
+
 ## [2026-03-25] — Help System & Final Bug Pass
 
 ### Bug Fixes
