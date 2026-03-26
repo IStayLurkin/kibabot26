@@ -26,14 +26,15 @@ class VisionService:
         self.performance_tracker = performance_tracker
         self._client = OpenAI(base_url=OLLAMA_BASE_URL, api_key=OLLAMA_API_KEY, timeout=OLLAMA_REQUEST_TIMEOUT_SECONDS)
 
-    async def _fetch_image_b64(self, url: str) -> str:
-        """Download image from URL and return base64 string."""
+    async def _fetch_image_b64(self, url: str) -> tuple[str, str]:
+        """Download image from URL and return (base64 string, content_type)."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(url)
             resp.raise_for_status()
-            return base64.b64encode(resp.content).decode("utf-8")
+            content_type = resp.headers.get("content-type", "image/png").split(";")[0].strip()
+            return base64.b64encode(resp.content).decode("utf-8"), content_type
 
-    def _analyze_sync(self, image_b64: str, prompt: str, model: str) -> str:
+    def _analyze_sync(self, image_b64: str, prompt: str, model: str, content_type: str = "image/png") -> str:
         response = self._client.chat.completions.create(
             model=model,
             messages=[
@@ -41,7 +42,7 @@ class VisionService:
                     "role": "user",
                     "content": [
                         {"type": "text", "text": prompt or "Describe this image."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                        {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{image_b64}"}},
                     ],
                 }
             ],
@@ -55,8 +56,8 @@ class VisionService:
         model = VISION_TIERS.get(tier, VISION_FAST_MODEL)
         started_at = time.perf_counter()
         try:
-            image_b64 = await self._fetch_image_b64(url)
-            return await asyncio.to_thread(self._analyze_sync, image_b64, prompt, model)
+            image_b64, content_type = await self._fetch_image_b64(url)
+            return await asyncio.to_thread(self._analyze_sync, image_b64, prompt, model, content_type)
         finally:
             if self.performance_tracker is not None:
                 self.performance_tracker.record_service_call(
@@ -64,13 +65,13 @@ class VisionService:
                     (time.perf_counter() - started_at) * 1000,
                 )
 
-    async def analyze_bytes(self, image_bytes: bytes, prompt: str = "", tier: str = "fast") -> str:
+    async def analyze_bytes(self, image_bytes: bytes, prompt: str = "", content_type: str = "image/png", tier: str = "fast") -> str:
         """Analyze image from raw bytes."""
         model = VISION_TIERS.get(tier, VISION_FAST_MODEL)
         started_at = time.perf_counter()
         try:
             image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-            return await asyncio.to_thread(self._analyze_sync, image_b64, prompt, model)
+            return await asyncio.to_thread(self._analyze_sync, image_b64, prompt, model, content_type)
         finally:
             if self.performance_tracker is not None:
                 self.performance_tracker.record_service_call(
