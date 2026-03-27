@@ -60,14 +60,16 @@ class VideoCommands(commands.Cog):
                     await status_msg.edit(content=f"❌ **{label} service not initialized.**")
                     return
 
+                await status_msg.edit(content=f"🎬 **{label}** — killing Ollama, freeing RAM...")
                 video_path = await service.generate(**generate_kwargs, callback=update_progress)
 
                 if video_path and Path(video_path).exists():
-                    await status_msg.edit(content=f"✅ **{label} complete!**")
+                    await status_msg.edit(content=f"✅ **{label} complete!** Sending...")
                     await ctx.send(
                         content=f"🎬 **{label}** | Prompt: *{prompt[:100]}*",
                         file=discord.File(video_path, filename=Path(video_path).name),
                     )
+                    await status_msg.edit(content=f"✅ **{label} complete!**")
                 else:
                     await status_msg.edit(content=f"❌ **{label} failed.** Check VRAM and logs.")
             except Exception as exc:
@@ -96,15 +98,29 @@ class VideoCommands(commands.Cog):
         await self._handle_video(ctx, prompt, "AnimateDiff", "animatediff_service", {"prompt": prompt})
 
     @commands.command(name="wan")
-    @commands.cooldown(1, 300, commands.BucketType.user)
+    @commands.cooldown(1, 120, commands.BucketType.user)
     async def wan(self, ctx: commands.Context, *, prompt: str = ""):
+        """Generate a 480p video with Wan2.1-1.3B (~6GB VRAM, ~2 min). Fast, fits in VRAM."""
+        await self._handle_video(ctx, prompt, "Wan2.1-1.3B", "wan_fast_service", {"prompt": prompt})
+
+    @commands.command(name="wan2")
+    @commands.cooldown(1, 600, commands.BucketType.user)
+    async def wan2(self, ctx: commands.Context, *, prompt: str = ""):
+        """Generate a 480p video with Wan2.2-TI2V-5B (~10GB VRAM, ~10 min). Unloads Ollama first."""
+        await self._handle_video(ctx, prompt, "Wan2.2-5B", "wan22_service", {"prompt": prompt})
+
+    @commands.command(name="wan14b")
+    @commands.cooldown(1, 600, commands.BucketType.user)
+    async def wan14b(self, ctx: commands.Context, *, prompt: str = ""):
         """Generate a 720p video with Wan2.1-14B (~20GB VRAM, ~10 min). Unloads Ollama first."""
-        await self._handle_video(ctx, prompt, "Wan2.1", "wan_service", {"prompt": prompt})
+        await self._handle_video(ctx, prompt, "Wan2.1-14B", "wan_service", {"prompt": prompt})
 
     @cogvideo2b.error
     @cogvideo5b.error
     @animatediff.error
     @wan.error
+    @wan2.error
+    @wan14b.error
     async def video_cooldown_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(f"⏳ Cooldown — try again in {error.retry_after:.0f}s.")

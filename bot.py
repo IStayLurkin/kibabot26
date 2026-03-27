@@ -46,6 +46,8 @@ from services.voice_service import VoiceService
 from services.cogvideo_service import CogVideoService
 from services.animatediff_service import AnimateDiffService
 from services.wan_service import WanService
+from services.wan_fast_service import WanFastService
+from services.wan22_service import Wan22Service
 from services.thinking_service import ThinkingService
 from services.vision_service import VisionService
 from services.fish_speech_service import FishSpeechService
@@ -141,6 +143,8 @@ class ExpenseBot(commands.Bot):
         self.cogvideo_service = None
         self.animatediff_service = None
         self.wan_service = None
+        self.wan_fast_service = None
+        self.wan22_service = None
         self.thinking_service = None
         self.vision_service = None
         self.fish_speech_service = None
@@ -217,6 +221,8 @@ class ExpenseBot(commands.Bot):
         self.cogvideo_service = CogVideoService()
         self.animatediff_service = AnimateDiffService()
         self.wan_service = WanService(runtime_service=self.model_runtime_service)
+        self.wan_fast_service = WanFastService()
+        self.wan22_service = Wan22Service()
         self.thinking_service = ThinkingService(performance_tracker=self.performance_tracker)
         self.vision_service = VisionService(performance_tracker=self.performance_tracker)
         from core.config import FISH_SPEECH_ENABLED, PARAKEET_ENABLED
