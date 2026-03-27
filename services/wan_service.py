@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import os
 import time
 import asyncio
 import aiohttp
@@ -15,15 +16,11 @@ from services.hardware_service import HardwareService
 
 logger = get_logger(__name__)
 
-try:
-    from diffusers import WanPipeline
-    import imageio
-except ImportError:
-    WanPipeline = None
-    imageio = None
+# WanPipeline and imageio are imported lazily inside _load() to avoid triggering
+# HuggingFace snapshot checks (and 37GB downloads) at bot startup.
 
 WAN_REPO = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
-OUTPUT_DIR = Path("D:/ai storage/generated_media/videos")
+OUTPUT_DIR = Path("J:/aistorage/generated_media/videos")
 
 
 class WanService:
@@ -52,13 +49,20 @@ class WanService:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     "http://localhost:11434/api/chat",
-                    json={"model": model_name, "keep_alive": 0}
+                    json={"model": model_name, "keep_alive": 0},
+                    timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     if resp.status == 200:
                         logger.debug("[wan] Ollama ejected from VRAM.")
-            await asyncio.sleep(1)
-            torch.cuda.empty_cache()
-            gc.collect()
+            # Wait for Ollama to actually release CUDA memory
+            for _ in range(10):
+                await asyncio.sleep(1)
+                torch.cuda.empty_cache()
+                gc.collect()
+                free_mb = (torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_reserved(0)) / 1024 / 1024
+                logger.debug("[wan] VRAM free after unload: %.0fMB", free_mb)
+                if free_mb > 8000:
+                    break
         except Exception as e:
             logger.debug("[wan] Ollama unload failed: %s", e)
 
@@ -73,9 +77,18 @@ class WanService:
     def _load(self):
         if self.pipeline is not None:
             return
+        try:
+            from diffusers import WanPipeline as _WanPipeline
+        except ImportError as exc:
+            raise RuntimeError("diffusers is not installed — cannot load Wan2.1") from exc
         logger.info("[wan] Loading Wan2.1-T2V-14B-Diffusers (720p, 81 frames)...")
-        self.pipeline = WanPipeline.from_pretrained(WAN_REPO, torch_dtype=torch.bfloat16)
+        self.pipeline = _WanPipeline.from_pretrained(
+            WAN_REPO, torch_dtype=torch.bfloat16, local_files_only=True
+        )
+        # Keep text encoder on CPU to avoid OOM — it gets offloaded per-forward automatically
+        self.pipeline.text_encoder.to("cpu")
         self.pipeline.enable_model_cpu_offload()
+        os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
         logger.info("[wan] Wan2.1 loaded.")
 
     def _generate_sync(self, prompt: str, filepath: str, callback) -> str:
@@ -100,16 +113,19 @@ class WanService:
             width=1280,
             callback_on_step_end=step_callback,
         )
-        import numpy as np
+        try:
+            import imageio
+            import numpy as np
+        except ImportError as exc:
+            raise RuntimeError("imageio or numpy not installed — cannot save video") from exc
         frames = output.frames[0]
+        logger.info("[wan] Generation complete, saving %d frames to %s", len(frames), filepath)
         frames_np = [np.array(f) for f in frames]
         imageio.mimwrite(filepath, frames_np, fps=16, codec="libx264")
+        logger.info("[wan] Video saved: %s (%.1f MB)", filepath, Path(filepath).stat().st_size / 1024 / 1024)
         return filepath
 
     async def generate(self, prompt: str, callback) -> Optional[str]:
-        if WanPipeline is None or imageio is None:
-            logger.error("[wan] WanPipeline or imageio not available.")
-            return None
         await self._unload_ollama()
         filename = f"wan_{int(time.time())}.mp4"
         filepath = str(OUTPUT_DIR / filename)
@@ -119,6 +135,6 @@ class WanService:
                 HEAVY_EXECUTOR, self._generate_sync, prompt, filepath, callback
             )
         except Exception as e:
-            logger.error("[wan] Generation failed: %s", e)
+            logger.exception("[wan] Generation failed: %s", e)
             self._purge_vram()
             return None

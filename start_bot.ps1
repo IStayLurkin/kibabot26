@@ -33,4 +33,7 @@ if ($dockerReady) {
 
 # 4. Launch the bot
 Write-Host "Launching Kiba Bot..."
+$env:PYTHONIOENCODING = "utf-8"
+$env:PYTORCH_ALLOC_CONF = "expandable_segments:True"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 & "$PSScriptRoot\.venv\Scripts\python.exe" "$PSScriptRoot\bot.py"

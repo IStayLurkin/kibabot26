@@ -28,7 +28,7 @@ except ImportError:
 
 MOTION_ADAPTER_REPO = "guoyww/animatediff-motion-adapter-v1-5-2"
 BASE_MODEL_REPO = "SG161222/Realistic_Vision_V5.1_noVAE"
-OUTPUT_DIR = Path("D:/ai storage/generated_media/videos")
+OUTPUT_DIR = Path("J:/aistorage/generated_media/videos")
 
 
 class AnimateDiffService:

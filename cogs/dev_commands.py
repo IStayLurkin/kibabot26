@@ -1,8 +1,12 @@
 import os
 import sys
+import json
 import subprocess
 import discord
 from discord.ext import commands
+from pathlib import Path
+
+RESTART_STATE_FILE = Path(__file__).parent.parent / ".restart_state.json"
 
 
 class DevCommands(commands.Cog):
@@ -95,9 +99,60 @@ class DevCommands(commands.Cog):
             await ctx.send(f"Git pull failed (exit {result.returncode}):\n```{output}```")
             return
 
-        await ctx.send(f"```{output}```\nRestarting...")
+        msg = await ctx.send("```\n[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%  Restarting...\n```")
+        RESTART_STATE_FILE.write_text(json.dumps({
+            "channel_id": ctx.channel.id,
+            "message_id": msg.id,
+        }))
         await self.bot.close()
         os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    @commands.command(name="log")
+    @commands.is_owner()
+    async def show_log(self, ctx, *args):
+        """Show bot.log. Usage: !log [lines] [errors] [filter]
+        Examples: !log | !log 100 | !log errors | !log errors wan | !log errors 100 wan"""
+        log_path = Path(__file__).parent.parent / "bot.log"
+        if not log_path.exists():
+            await ctx.send("No log file found. Make sure the bot was started via `start_bot.ps1`.")
+            return
+
+        lines = 50
+        errors_only = False
+        filter_term = None
+
+        for arg in args:
+            if arg.isdigit():
+                lines = int(arg)
+            elif arg.lower() == "errors":
+                errors_only = True
+            else:
+                filter_term = arg.lower()
+
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+
+        if errors_only:
+            matched = [l for l in all_lines if " ERROR " in l or " WARNING " in l or "Traceback" in l or "Exception" in l]
+        else:
+            matched = all_lines
+
+        if filter_term:
+            matched = [l for l in matched if filter_term in l.lower()]
+
+        tail_lines = matched[-lines:]
+        tail = "".join(tail_lines)
+
+        if not tail.strip():
+            qualifier = "errors" if errors_only else "entries"
+            suffix = f" matching '{filter_term}'" if filter_term else ""
+            await ctx.send(f"No {qualifier}{suffix} found in the last {lines} lines.")
+            return
+
+        chunk_size = 1900
+        chunks = [tail[i:i+chunk_size] for i in range(0, len(tail), chunk_size)]
+        for chunk in chunks:
+            await ctx.send(f"```\n{chunk}\n```")
 
     @commands.command()
     @commands.is_owner()
@@ -114,6 +169,7 @@ class DevCommands(commands.Cog):
     @cogs.error
     @update.error
     @reloadchat.error
+    @show_log.error
     async def dev_command_error(self, ctx, error):
         if isinstance(error, commands.NotOwner):
             await ctx.send("You are not allowed to use that command.")

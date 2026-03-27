@@ -1,9 +1,9 @@
 """
-One-shot script to download all bot models to D:/ai storage/huggingface_cache
+One-shot script to download all bot models to J:/aistorage/huggingface_cache
 Run from the bot venv: python download_models.py
 """
 import os
-os.environ["HF_HOME"] = "D:/ai storage/huggingface_cache"
+os.environ["HF_HOME"] = "J:/aistorage/huggingface_cache"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "0"
 
 from huggingface_hub import snapshot_download, login

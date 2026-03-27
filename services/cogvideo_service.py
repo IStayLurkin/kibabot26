@@ -25,7 +25,7 @@ except ImportError:
 
 COGVIDEO_2B_REPO = "THUDM/CogVideoX-2b"
 COGVIDEO_5B_REPO = "THUDM/CogVideoX-5b"
-OUTPUT_DIR = Path("D:/ai storage/generated_media/videos")
+OUTPUT_DIR = Path("J:/aistorage/generated_media/videos")
 
 
 class CogVideoService:

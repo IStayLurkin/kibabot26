@@ -250,8 +250,6 @@ class ExpenseBot(commands.Bot):
         )
 
         extensions = [
-            "cogs.expense_commands",
-            "cogs.budget_commands",
             "cogs.error_handler",
             "cogs.chat_commands",
             "cogs.dev_commands",
@@ -339,6 +337,7 @@ async def on_ready():
     )
 
     if not bot.startup_banner_printed:
+        await startup_progress.attach_bot(bot)
         startup_progress.advance("Discord")
         bot.print_startup_banner()
         bot.startup_banner_printed = True

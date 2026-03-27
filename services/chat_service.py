@@ -408,18 +408,6 @@ async def generate_dynamic_reply(
                 goal="answer current date/time question",
             )
 
-        from services.chat_router import is_greeting
-        if is_greeting(user_text.lower().strip()):
-            memory_rows = await get_user_memory(user_id)
-            memory = format_memory(memory_rows)
-            name = memory.get("name", display_name)
-            return ChatReply(
-                content=f"Hey {name}.",
-                intent="casual_chat",
-                response_mode="direct",
-                goal="greet user",
-            )
-
         recent_messages = await get_recent_chat_messages(session_id, limit=CHAT_RECENT_MESSAGE_LIMIT)
         memory_rows = await get_user_memory(user_id)
         memory = format_memory(memory_rows)

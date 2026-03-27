@@ -9,6 +9,7 @@ from typing import Optional
 from core.executors import HEAVY_EXECUTOR
 from core.logging_config import get_logger
 from services.hardware_service import HardwareService
+from core.config import OLLAMA_BASE_URL, OLLAMA_MODEL
 
 logger = get_logger(__name__)
 _hardware = HardwareService()
@@ -29,7 +30,7 @@ class ImageService:
     def __init__(self, **kwargs):
         self.pipeline = None
         self.current_engine = None # Tracks 'FLUX' or 'SDXL'
-        self.output_dir = "D:/ai storage/generated_media/images"
+        self.output_dir = "J:/aistorage/generated_media/images"
         self._last_activity = 0
         self._unload_task = None
         self._generation_lock = asyncio.Lock()
@@ -93,19 +94,53 @@ class ImageService:
         """Entry for !fast (SDXL)"""
         return await self._run_gen(prompt, "SDXL", progress_callback)
 
+    async def _ollama_unload(self):
+        """Tell Ollama to release the current model from VRAM."""
+        base = OLLAMA_BASE_URL.replace("/v1", "")
+        model = OLLAMA_MODEL.replace(":latest", "")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{base}/api/generate",
+                    json={"model": model, "keep_alive": 0},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    logger.info("[ImageService] Ollama unload: %s", resp.status)
+        except Exception as exc:
+            logger.warning("[ImageService] Ollama unload failed: %s", exc)
+
+    async def _ollama_reload(self):
+        """Pre-warm Ollama model back into VRAM after generation."""
+        base = OLLAMA_BASE_URL.replace("/v1", "")
+        model = OLLAMA_MODEL.replace(":latest", "")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{base}/api/generate",
+                    json={"model": model, "keep_alive": -1, "prompt": ""},
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    logger.info("[ImageService] Ollama reload: %s", resp.status)
+        except Exception as exc:
+            logger.warning("[ImageService] Ollama reload failed: %s", exc)
+
     async def _run_gen(self, prompt, mode, callback):
         filename = f"kiba_{mode.lower()}_{int(time.time())}.png"
         filepath = os.path.join(self.output_dir, filename)
         try:
             loop = asyncio.get_running_loop()
             async with self._generation_lock:
-                return await loop.run_in_executor(
+                await self._ollama_unload()
+                result = await loop.run_in_executor(
                     HEAVY_EXECUTOR,
                     self._generate_sync,
                     prompt, filepath, mode, callback, loop
                 )
+                asyncio.ensure_future(self._ollama_reload())
+                return result
         except Exception as e:
             logger.error("%s generation failed: %s", mode, e)
+            asyncio.ensure_future(self._ollama_reload())
             return None
 
     def _generate_sync(self, prompt, filepath, mode, callback, main_loop=None):

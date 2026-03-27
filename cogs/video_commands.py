@@ -72,7 +72,8 @@ class VideoCommands(commands.Cog):
                     await status_msg.edit(content=f"❌ **{label} failed.** Check VRAM and logs.")
             except Exception as exc:
                 logger.exception("[video_commands] %s failed: %s", label, exc)
-                await status_msg.edit(content=f"❌ **{label} error:** {exc}")
+                exc_str = str(exc)[:1800]
+                await status_msg.edit(content=f"❌ **{label} error:** {exc_str}")
             finally:
                 self.bot.generating_count -= 1
 
@@ -97,7 +98,7 @@ class VideoCommands(commands.Cog):
     @commands.command(name="wan")
     @commands.cooldown(1, 300, commands.BucketType.user)
     async def wan(self, ctx: commands.Context, *, prompt: str = ""):
-        """Generate a video with Wan2.1-14B (~16GB VRAM, ~5 min). Unloads Ollama first."""
+        """Generate a 720p video with Wan2.1-14B (~20GB VRAM, ~10 min). Unloads Ollama first."""
         await self._handle_video(ctx, prompt, "Wan2.1", "wan_service", {"prompt": prompt})
 
     @cogvideo2b.error

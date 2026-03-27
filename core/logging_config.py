@@ -78,6 +78,13 @@ def setup_logging(level: int = logging.INFO):
     _real_handler.setFormatter(ColorFormatter(LOG_FORMAT, datefmt=DATE_FORMAT))
     root_logger.addHandler(BufferingHandler(_real_handler))
 
+    # Always write plain logs to bot.log regardless of terminal piping
+    log_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bot.log")
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    plain_formatter = logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT)
+    file_handler.setFormatter(plain_formatter)
+    root_logger.addHandler(file_handler)
+
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("discord.client").setLevel(logging.WARNING)
@@ -106,18 +113,52 @@ class StartupProgress:
     GREEN = "\033[38;5;82m"
     CYAN = "\033[38;5;51m"
     GREY = "\033[38;5;240m"
+    OWNER_ID = 1401400377110171808
 
     def __init__(self):
         global _startup_active
         self._current = 0
         self._total = len(self.STEPS)
+        self._done = False
         _startup_active = True
+        self._discord_message = None  # set after bot is ready
+        self._bot = None
+
+    async def attach_bot(self, bot):
+        """Call this once the Discord client is ready to enable DM progress updates."""
+        self._bot = bot
+        await self._load_restart_state()
+
+    async def _load_restart_state(self):
+        import json
+        from pathlib import Path
+        state_file = Path(__file__).parent.parent / ".restart_state.json"
+        if not state_file.exists():
+            return
+        try:
+            state = json.loads(state_file.read_text())
+            channel = await self._bot.fetch_channel(state["channel_id"])
+            self._discord_message = await channel.fetch_message(state["message_id"])
+            state_file.unlink()
+        except Exception:
+            pass
 
     def advance(self, label: str | None = None):
         global _startup_active
+        if self._done:
+            return
         self._current = min(self._current + 1, self._total)
         self._print(label)
+        if self._bot is not None:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.ensure_future(self._update_discord())
+            except Exception:
+                pass
         if self._current >= self._total:
+            self._done = True
             _startup_active = False
             sys.stdout.write("\n")
             sys.stdout.flush()
@@ -125,6 +166,32 @@ class StartupProgress:
                 for record in _log_buffer:
                     _real_handler.emit(record)
                 _log_buffer.clear()
+
+    def _bar_text(self) -> str:
+        filled = int(self.BAR_WIDTH * self._current / self._total)
+        empty = self.BAR_WIDTH - filled
+        bar = "█" * filled + "░" * empty
+        pct = int(100 * self._current / self._total)
+        if self._current >= self._total:
+            status = "Koba ready!"
+        else:
+            step = self.STEPS[min(self._current, self._total - 1)]
+            status = f"Loading {step}..."
+        return f"[{bar}] {pct}%  {status}"
+
+    async def _update_discord(self):
+        import asyncio
+        try:
+            text = f"```\n{self._bar_text()}\n```"
+            if self._discord_message is not None:
+                await self._discord_message.edit(content=text)
+                await asyncio.sleep(0.3)
+            else:
+                user = await self._bot.fetch_user(self.OWNER_ID)
+                dm = await user.create_dm()
+                self._discord_message = await dm.send(text)
+        except Exception:
+            pass
 
     def _print(self, label: str | None = None):
         filled = int(self.BAR_WIDTH * self._current / self._total)
@@ -135,6 +202,5 @@ class StartupProgress:
             status = f"{self.GREEN}Kiba Bot ready!{RESET}"
         else:
             status = f"{self.CYAN}Kiba Bot loading...{RESET}"
-        line = f"\r[{bar}] {pct:3d}%  {status}"
-        sys.stdout.write(line + "\033[K")
+        sys.stdout.write(f"\r[{bar}] {pct:3d}%  {status}\033[K")
         sys.stdout.flush()
