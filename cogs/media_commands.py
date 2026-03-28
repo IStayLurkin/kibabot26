@@ -366,10 +366,46 @@ class MediaCommands(commands.Cog):
         except Exception as exc:
             await status_msg.edit(content=f"❌ Error: {str(exc)[:200]}")
 
+    @commands.command(name="sample", aliases=["loop", "beat"])
+    @commands.cooldown(1, 30, commands.BucketType.user)
+    async def sample_command(self, ctx: commands.Context, *, prompt: str = "") -> None:
+        """Generate a music loop with Foundation-1 (~8s). Supports BPM and bar count in prompt."""
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!sample 120 BPM 4 bar warm pad C major reverb`")
+            return
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        service = getattr(self.bot, "foundation_service", None)
+        if service is None:
+            await ctx.send("❌ Foundation-1 service not initialized.")
+            return
+
+        status_msg = await ctx.send(f"🎵 **Foundation-1** — generating loop...")
+
+        try:
+            audio_path = await service.generate(prompt)
+            if audio_path and Path(audio_path).exists():
+                if not _check_file_size(audio_path):
+                    await status_msg.edit(content="❌ Generated audio too large to upload (>25MB).")
+                else:
+                    await status_msg.edit(content="✅ Done!")
+                    await ctx.send(
+                        content=f"🎵 **Foundation-1** | *{prompt[:100]}*",
+                        file=discord.File(audio_path, filename=Path(audio_path).name),
+                    )
+            else:
+                await status_msg.edit(content="❌ Foundation-1 generation failed. Check logs.")
+        except Exception as exc:
+            await status_msg.edit(content=f"❌ Error: {str(exc)[:200]}")
+
     @image_command.error
     @zimage_command.error
     @flux2klein_command.error
     @flux2fp8_command.error
+    @sample_command.error
     async def image_cooldown_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(f"⏳ Cooldown — try again in {error.retry_after:.0f}s.")

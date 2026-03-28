@@ -51,6 +51,7 @@ from services.wan22_service import Wan22Service
 from services.zimage_service import ZImageService
 from services.flux2klein_service import Flux2KleinService
 from services.flux2fp8_service import Flux2FP8Service
+from services.foundation_service import FoundationService
 from services.thinking_service import ThinkingService
 from services.vision_service import VisionService
 from services.fish_speech_service import FishSpeechService
@@ -151,6 +152,7 @@ class ExpenseBot(commands.Bot):
         self.zimage_service = None
         self.flux2klein_service = None
         self.flux2fp8_service = None
+        self.foundation_service = None
         self.thinking_service = None
         self.vision_service = None
         self.fish_speech_service = None
@@ -232,6 +234,7 @@ class ExpenseBot(commands.Bot):
         self.zimage_service = ZImageService()
         self.flux2klein_service = Flux2KleinService()
         self.flux2fp8_service = Flux2FP8Service()
+        self.foundation_service = FoundationService()
         self.thinking_service = ThinkingService(performance_tracker=self.performance_tracker)
         self.vision_service = VisionService(performance_tracker=self.performance_tracker)
         from core.config import FISH_SPEECH_ENABLED, PARAKEET_ENABLED
