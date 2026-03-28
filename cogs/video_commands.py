@@ -104,10 +104,9 @@ class VideoCommands(commands.Cog):
         await self._handle_video(ctx, prompt, "Wan2.1-1.3B", "wan_fast_service", {"prompt": prompt})
 
     @commands.command(name="wan2")
-    @commands.cooldown(1, 600, commands.BucketType.user)
     async def wan2(self, ctx: commands.Context, *, prompt: str = ""):
-        """Generate a 480p video with Wan2.2-TI2V-5B (~10GB VRAM, ~10 min). Unloads Ollama first."""
-        await self._handle_video(ctx, prompt, "Wan2.2-5B", "wan22_service", {"prompt": prompt})
+        """Wan2.2-TI2V-5B — disabled until flash_attn supports torch 2.10."""
+        await ctx.send("❌ `!wan2` is temporarily disabled — Wan2.2 requires flash_attn which doesn't support torch 2.10 yet.")
 
     @commands.command(name="wan14b")
     @commands.cooldown(1, 600, commands.BucketType.user)

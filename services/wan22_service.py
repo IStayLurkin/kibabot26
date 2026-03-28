@@ -110,9 +110,10 @@ class Wan22Service:
             if not line:
                 continue
             logger.info("[wan22] %s", line)
-            # Parse tqdm progress: e.g. " 42%|████  | 21/50 [01:23<...]"
+            # Parse tqdm diffusion steps only: e.g. " 42%|████  | 21/50 [01:23<...]"
+            # Match only when total == sample_steps (50), not shard loading (3) or other bars
             m = re.search(r"(\d+)%\|.*?\|\s*(\d+)/(\d+)", line)
-            if m and callback:
+            if m and callback and int(m.group(3)) == 50:
                 percent = int(m.group(1))
                 callback(percent, 0.0)
 

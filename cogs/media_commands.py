@@ -246,7 +246,130 @@ class MediaCommands(commands.Cog):
             except Exception as exc:
                 await ctx.send(f"❌ Song generation failed: {exc}")
 
+    @commands.command(name="flux2", aliases=["fk", "flux2klein"])
+    @commands.cooldown(1, 15, commands.BucketType.user)
+    async def flux2klein_command(self, ctx: commands.Context, *, prompt: str = "") -> None:
+        """Generate an image with FLUX.2 Klein (4 steps, ~17GB VRAM, high quality)."""
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!flux2 a neon fox in the rain`")
+            return
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        service = getattr(self.bot, "flux2klein_service", None)
+        if service is None:
+            await ctx.send("❌ FLUX.2 Klein service not initialized.")
+            return
+
+        status_msg = await ctx.send("✨ **FLUX.2 Klein** — loading model (~17GB)...")
+
+        async def update(percent: int):
+            blocks = int(percent / 10)
+            bar = "█" * blocks + "░" * (10 - blocks)
+            await status_msg.edit(content=f"✨ **FLUX.2 Klein** [{bar}] {percent}%")
+
+        try:
+            image_path = await service.generate(prompt, callback=update)
+            if image_path and Path(image_path).exists():
+                if not _check_file_size(image_path):
+                    await status_msg.edit(content="❌ Generated image too large to upload (>25MB).")
+                else:
+                    await status_msg.edit(content="✅ Done!")
+                    await ctx.send(
+                        content=f"✨ **FLUX.2 Klein** | *{prompt[:100]}*",
+                        file=discord.File(image_path, filename=Path(image_path).name),
+                    )
+            else:
+                await status_msg.edit(content="❌ FLUX.2 Klein generation failed. Check VRAM and logs.")
+        except Exception as exc:
+            await status_msg.edit(content=f"❌ Error: {str(exc)[:200]}")
+
+    @commands.command(name="flux2fp8", aliases=["fp8"])
+    @commands.cooldown(1, 15, commands.BucketType.user)
+    async def flux2fp8_command(self, ctx: commands.Context, *, prompt: str = "") -> None:
+        """Generate an image with FLUX.2 Klein FP8 (~8.8GB VRAM, 4 steps)."""
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!flux2fp8 a neon fox in the rain`")
+            return
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        service = getattr(self.bot, "flux2fp8_service", None)
+        if service is None:
+            await ctx.send("❌ FLUX.2 FP8 service not initialized.")
+            return
+
+        status_msg = await ctx.send("✨ **FLUX.2 Klein FP8** — loading model...")
+
+        async def update(percent: int):
+            blocks = int(percent / 10)
+            bar = "█" * blocks + "░" * (10 - blocks)
+            await status_msg.edit(content=f"✨ **FLUX.2 Klein FP8** [{bar}] {percent}%")
+
+        try:
+            image_path = await service.generate(prompt, callback=update)
+            if image_path and Path(image_path).exists():
+                if not _check_file_size(image_path):
+                    await status_msg.edit(content="❌ Generated image too large to upload (>25MB).")
+                else:
+                    await status_msg.edit(content="✅ Done!")
+                    await ctx.send(
+                        content=f"✨ **FLUX.2 Klein FP8** | *{prompt[:100]}*",
+                        file=discord.File(image_path, filename=Path(image_path).name),
+                    )
+            else:
+                await status_msg.edit(content="❌ FLUX.2 FP8 generation failed. Check VRAM and logs.")
+        except Exception as exc:
+            await status_msg.edit(content=f"❌ Error: {str(exc)[:200]}")
+
+    @commands.command(name="zimage", aliases=["zi", "zimg"])
+    @commands.cooldown(1, 8, commands.BucketType.user)
+    async def zimage_command(self, ctx: commands.Context, *, prompt: str = "") -> None:
+        """Generate an image with Z-Image-Turbo (8 steps, ~5s)."""
+        prompt = prompt.strip()
+        if not prompt:
+            await ctx.send("Provide a prompt. Example: `!zimage a neon fox in the rain`")
+            return
+        if len(prompt) > MAX_PROMPT_LENGTH:
+            await ctx.send(f"Prompt is too long. Keep it under {MAX_PROMPT_LENGTH} characters.")
+            return
+
+        service = getattr(self.bot, "zimage_service", None)
+        if service is None:
+            await ctx.send("❌ Z-Image-Turbo service not initialized.")
+            return
+
+        status_msg = await ctx.send("⚡ **Z-Image-Turbo** — generating...")
+
+        async def update(percent: int):
+            blocks = int(percent / 10)
+            bar = "█" * blocks + "░" * (10 - blocks)
+            await status_msg.edit(content=f"⚡ **Z-Image-Turbo** [{bar}] {percent}%")
+
+        try:
+            image_path = await service.generate(prompt, callback=update)
+            if image_path and Path(image_path).exists():
+                if not _check_file_size(image_path):
+                    await status_msg.edit(content="❌ Generated image too large to upload (>25MB).")
+                else:
+                    await status_msg.edit(content="✅ Done!")
+                    await ctx.send(
+                        content=f"⚡ **Z-Image-Turbo** | *{prompt[:100]}*",
+                        file=discord.File(image_path, filename=Path(image_path).name),
+                    )
+            else:
+                await status_msg.edit(content="❌ Z-Image-Turbo generation failed. Check logs.")
+        except Exception as exc:
+            await status_msg.edit(content=f"❌ Error: {str(exc)[:200]}")
+
     @image_command.error
+    @zimage_command.error
+    @flux2klein_command.error
+    @flux2fp8_command.error
     async def image_cooldown_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.send(f"⏳ Cooldown — try again in {error.retry_after:.0f}s.")

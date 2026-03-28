@@ -41,6 +41,29 @@ class ChatReply:
     tool_name: str = ""
 
 
+_CASUAL_PATTERNS = {
+    "hey", "hi", "hello", "sup", "what's up", "whats up", "yo", "hiya",
+    "yeah", "ye", "yep", "yup", "ok", "okay", "k", "lol", "lmao", "haha",
+    "nice", "cool", "interesting", "wild", "damn", "bruh", "bro", "man",
+    "nah", "nope", "no", "yes", "sure", "alright", "alr", "bet",
+    "not much", "nm", "same", "fr", "facts", "true", "word",
+}
+
+def _should_retrieve_memory(text: str) -> bool:
+    """Only retrieve vector memories when the message is substantive enough to warrant it.
+    Skip retrieval for casual greetings, short affirmations, and vague statements
+    that would cause semantic noise and inject irrelevant past topics."""
+    stripped = text.strip().lower().rstrip("!?.,")
+    # Skip if the whole message is a known casual phrase
+    if stripped in _CASUAL_PATTERNS:
+        return False
+    # Skip very short messages (under 6 words) that are likely casual
+    words = stripped.split()
+    if len(words) < 6:
+        return False
+    return True
+
+
 def _build_tool_context(route_decision, conversation_state: dict) -> str:
     parts = []
 
@@ -436,7 +459,7 @@ async def generate_dynamic_reply(
             from database.behavior_rules_repository import get_bot_config
             memory_mode = await get_bot_config("memory_mode", "local")
             active_memory_service = mem0_service if (memory_mode == "mem0" and mem0_service is not None) else vector_memory_service
-            if active_memory_service is not None:
+            if active_memory_service is not None and _should_retrieve_memory(user_text):
                 db_conn = await get_db()
                 relevant_memories = await active_memory_service.retrieve(db_conn, user_id=user_id, query=user_text)
         except Exception as exc:
