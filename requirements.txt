@@ -2,7 +2,7 @@
 --extra-index-url https://download.pytorch.org/whl/cu128
 
 # Core GPU Stack
-torch==2.10.0+cu128
+torch==2.13.0
 torchvision==0.25.0+cu128
 torchaudio==2.10.0+cu128
 
